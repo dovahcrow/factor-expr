@@ -1,4 +1,5 @@
 use super::ops::{from_str, Operator};
+use anyhow::Result;
 use arrow::{array::Array, record_batch::RecordBatch};
 use dict_derive::IntoPyObject;
 use fehler::throw;
@@ -126,6 +127,7 @@ pub fn replay<'py>(
     file: &str,
     mut ops: Vec<Py<Factor>>,
     batch_size: Option<usize>,
+    njobs: usize,
 ) -> PyResult<ReplayResult> {
     let mut ops: Vec<_> = ops.iter_mut().map(|f| f.borrow_mut(py)).collect();
     let ops = ops
@@ -133,10 +135,12 @@ pub fn replay<'py>(
         .map(|f| (&mut *f.op) as &mut dyn Operator<RecordBatch>)
         .collect();
 
-    let (nrows, succeeded, failed) = py.allow_threads(|| {
-        super::replay::replay(file, ops, batch_size)
-            .map_err(|e| PyValueError::new_err(format!("{}", e)))
-    })?;
+    let (nrows, succeeded, failed) = py
+        .allow_threads(|| -> Result<_> {
+            let pool = rayon::ThreadPoolBuilder::new().num_threads(njobs).build()?;
+            Ok(pool.install(|| super::replay::replay(file, ops, batch_size))?)
+        })
+        .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
 
     Ok(ReplayResult {
         nrows,

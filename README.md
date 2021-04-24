@@ -262,7 +262,8 @@ async def replay(
     factors: List[Factor],
     *,
     batch_size: int = 40960,
-    n_jobs: int = 1,
+    n_data_jobs: int = 1,
+    n_factor_jobs: int = 1,
     pbar: bool = True,
     trim: bool = False,
     index_col: Optional[str] = None,
@@ -280,8 +281,11 @@ async def replay(
         A list of Factors to replay on the given set of files.
     batch_size: int = 40960
         How many rows to replay at one time. Default is 40960 rows.
-    n_jobs: int = 1
-        How many datasets to run in parallel. Note that Factors will always being replayed in parallel.
+    n_data_jobs: int = 1
+        How many datasets to run in parallel. Note that the factor level parallelism is controlled by n_factor_jobs.
+    n_factor_jobs: int = 1
+        How many factors to run in parallel for **each** dataset.
+        e.g. if `n_data_jobs=3` and `n_factor_jobs=5`, you will have 3 * 5 threads running concurrently.
     pbar: bool = True
         Whether to show the progress bar using tqdm.
     trim: bool = False
@@ -292,5 +296,4 @@ async def replay(
         If True, failed factors will be printed out in stderr.
     output: Literal["pandas" | "pyarrow"] = "pandas"
         The return format, can be pandas DataFrame ("pandas") or pyarrow Table ("pyarrow").
-    """
 ```
