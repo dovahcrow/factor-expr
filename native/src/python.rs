@@ -53,8 +53,8 @@ impl Factor {
         self.op.depth()
     }
 
-    pub fn subindices(&self) -> Vec<usize> {
-        self.op.subindices()
+    pub fn children_indices(&self) -> Vec<usize> {
+        self.op.children_indices()
     }
 
     pub fn symbols(&self) -> Vec<String> {

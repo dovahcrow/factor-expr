@@ -140,7 +140,7 @@ macro_rules! impl_minmax {
                     self.s.len() + 1
                 }
 
-                fn subindices(&self) -> Vec<usize> {
+                fn children_indices(&self) -> Vec<usize> {
                     vec![1]
                 }
 

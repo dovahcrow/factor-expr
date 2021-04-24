@@ -34,7 +34,7 @@ where
 
     fn len(&self) -> usize;
     fn depth(&self) -> usize;
-    fn subindices(&self) -> Vec<usize>;
+    fn children_indices(&self) -> Vec<usize>;
     fn symbols(&self) -> Vec<String>;
     fn get(&self, i: usize) -> Option<BoxOp<T>>;
     fn insert(&mut self, i: usize, subtree: BoxOp<T>) -> Option<BoxOp<T>>;

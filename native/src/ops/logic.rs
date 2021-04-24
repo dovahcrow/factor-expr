@@ -90,7 +90,7 @@ impl<T: TickerBatch> Operator<T> for If<T> {
         self.cond.len() + self.btrue.len() + self.bfalse.len() + 1
     }
 
-    fn subindices(&self) -> Vec<usize> {
+    fn children_indices(&self) -> Vec<usize> {
         let ncond = self.cond.len();
         let nbtrue = self.btrue.len();
 
@@ -255,7 +255,7 @@ macro_rules! impl_logic_bivariate {
                     self.l.len() + self.r.len() + 1
                 }
 
-                fn subindices(&self) -> Vec<usize> {
+                fn children_indices(&self) -> Vec<usize> {
                     vec![1, self.l.len() + 1]
                 }
 
@@ -409,7 +409,7 @@ impl<T: TickerBatch> Operator<T> for Not<T> {
         self.s.len() + 1
     }
 
-    fn subindices(&self) -> Vec<usize> {
+    fn children_indices(&self) -> Vec<usize> {
         vec![1]
     }
 

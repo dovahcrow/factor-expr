@@ -108,7 +108,7 @@ impl<T: TickerBatch> Operator<T> for TSMean<T> {
         self.s.len() + 1
     }
 
-    fn subindices(&self) -> Vec<usize> {
+    fn children_indices(&self) -> Vec<usize> {
         vec![1]
     }
 

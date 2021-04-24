@@ -72,7 +72,7 @@ macro_rules! impl_arithmetic_bivariate {
                     self.l.len() + self.r.len() + 1
                 }
 
-                fn subindices(&self) -> Vec<usize> {
+                fn children_indices(&self) -> Vec<usize> {
                     vec![1, self.l.len() + 1]
                 }
 
@@ -223,7 +223,7 @@ macro_rules! impl_arithmetic_univariate {
                     self.s.len() + 1
                 }
 
-                fn subindices(&self) -> Vec<usize> {
+                fn children_indices(&self) -> Vec<usize> {
                     vec![1]
                 }
 
@@ -355,7 +355,7 @@ macro_rules! impl_arithmetic_univariate_1arg {
                     self.s.len() + 1
                 }
 
-                fn subindices(&self) -> Vec<usize> {
+                fn children_indices(&self) -> Vec<usize> {
                     vec![1]
                 }
 

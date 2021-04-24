@@ -26,7 +26,7 @@ impl<T: TickerBatch> Operator<T> for f64 {
         1
     }
 
-    fn subindices(&self) -> Vec<usize> {
+    fn children_indices(&self) -> Vec<usize> {
         vec![]
     }
 

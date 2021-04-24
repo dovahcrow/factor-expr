@@ -159,7 +159,7 @@ impl<T: TickerBatch> Operator<T> for TSCorrelation<T> {
         self.sx.len() + self.sy.len() + 1
     }
 
-    fn subindices(&self) -> Vec<usize> {
+    fn children_indices(&self) -> Vec<usize> {
         vec![1, self.sx.len() + 1]
     }
 

@@ -135,7 +135,7 @@ impl<T: TickerBatch> Operator<T> for TSSkew<T> {
         self.s.len() + 1
     }
 
-    fn subindices(&self) -> Vec<usize> {
+    fn children_indices(&self) -> Vec<usize> {
         vec![1]
     }
 
