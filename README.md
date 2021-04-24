@@ -102,7 +102,7 @@ For example, the code above will give you a DataFrame looks similar to this:
 | 0     | 0.23                    |
 | ...   | ...                     |
 
-Checkout the docstring of `replay` for more information!
+Check out the docstring of `replay` for more information!
 
 ## Installation
 
@@ -169,6 +169,32 @@ parameter to let replay trim off the warm-up period before it returns.
 
 `Factor Expr` guarantees that there will not be any `inf`, `-inf` or `NaN` appear in the result, except for the warm-up period. However, sometimes a factor can fail due to numerical issues. For example, `(Pow 3 (Pow 3 (Pow 3 :volume)))` might overflow and become `inf`, and `1 / inf` will become `NaN`. `Factor Expr` will detect these situations and mark these factors as failed. The failed factors will still be returned in the replay result, but the values in that column will be all `NaN`. You can easily remove these failed factors from the result by using `pd.DataFrame.dropna(axis=1, how="all")`.
 
+## I Want to Have a Time Index for the Result
+
+The `replay` function optionally accepts a `index_col` parameter. 
+If you want to set a column from the dataset as the index of the returned result, you can do the following:
+
+```python
+from factor_expr import Factor, replay
+
+pd.DataFrame({
+    "time": [datetime(2021,4,23), datetime(2021,4,24)], 
+    "open": [3.1, 5.8], 
+    "high": [8.8, 7.7], 
+    "low": [1.1, 2.1], 
+    "close": [4.4, 3.4],
+}).to_parquet("data.pq")
+
+result = await replay(
+    ["data.pq"],
+    [Factor("(TSLogReturn 30 :close)")],
+    index_col="time",
+)
+```
+
+Note, accessing the `time` column from factor expressions will cause an error. 
+Factor expressions can only read `float64` columns.
+
 ## API
 
 There are two components in `Factor Expr`, a `Factor` class and a `replay` function.
@@ -184,7 +210,7 @@ class Factor:
 
     def ready_offset(self) -> int:
         """Returns the first index after the warm-up period. 
-        For non-window functioins, this will always return 0."""
+        For non-window functions, this will always return 0."""
 
     def __len__(self) -> int:
         """Returns how many subtrees contained in this factor tree.
@@ -276,7 +302,7 @@ async def replay(
     Parameters
     ----------
     files: Iterable[str]
-        Paths to the datasets. Currently only parquet format is supported.
+        Paths to the datasets. Currently, only parquet format is supported.
     factors: List[Factor]
         A list of Factors to replay on the given set of files.
     batch_size: int = 40960
@@ -298,3 +324,4 @@ async def replay(
         The return format, can be pandas DataFrame ("pandas") or pyarrow Table ("pyarrow").
     """
 ```
+
