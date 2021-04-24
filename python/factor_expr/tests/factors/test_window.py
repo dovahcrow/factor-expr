@@ -11,7 +11,7 @@ FILENAME = "../assets/test.pq"
 def test_sum():
     df = pd.read_parquet(FILENAME)
     f = Factor("(TSSum 10 :price_ask_l1_close)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     assert np.isclose(
         df.price_ask_l1_close.rolling(10).sum().values[f.ready_offset() :],
@@ -23,7 +23,7 @@ def test_mean():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSMean 10 :price_ask_l1_open)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     assert np.isclose(
         df.price_ask_l1_open.rolling(10).mean().values[f.ready_offset() :],
@@ -35,7 +35,7 @@ def test_correlation():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSCorr 10 :price_ask_l1_high :price_bid_l1_low)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     def func(sub):
         subdf = df.loc[sub.index]
@@ -55,7 +55,7 @@ def test_min():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSMin 10 :price_ask_l1_close)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     assert np.isclose(
         df.price_ask_l1_close.rolling(10).min().values[f.ready_offset() :],
@@ -67,7 +67,7 @@ def test_max():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSMax 10 :price_ask_l1_open)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     assert np.isclose(
         df.price_ask_l1_open.rolling(10).max().values[f.ready_offset() :],
@@ -79,7 +79,7 @@ def test_argmax():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSArgMax 10 :price_ask_l1_close)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     def func(sub):
         subdf = df.loc[sub.index]
@@ -95,7 +95,7 @@ def test_argmin():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSArgMin 10 :price_ask_l1_low)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     def func(sub):
         subdf = df.loc[sub.index]
@@ -111,7 +111,7 @@ def test_std():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSStd 10 :price_ask_l1_high)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     assert np.isclose(
         df.price_ask_l1_high.rolling(10).std().values[f.ready_offset() :],
@@ -124,7 +124,7 @@ def test_skew():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSSkew 10 :price_bid_l1_high)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     assert np.isclose(
         np.nan_to_num(
@@ -138,7 +138,7 @@ def test_delay():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(Delay 10 :price_ask_l1_close)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     assert np.isclose(
         df.price_ask_l1_close.shift(10).values[f.ready_offset() :],
@@ -150,7 +150,7 @@ def test_rank():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSRank 10 :price_ask_l1_open)")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     def func(sub):
         subdf = df.loc[sub.index]
@@ -168,7 +168,7 @@ def test_logreturn():
     df = pd.read_parquet(FILENAME)
 
     f = Factor("(TSLogReturn 100 (Abs :price_ask_l1_high))")
-    result = asyncio.run(replay([FILENAME], [f], pbar=False))
+    result = asyncio.run(replay([FILENAME], [f], trim=True, pbar=False))
 
     assert np.isclose(
         np.log(

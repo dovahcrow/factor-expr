@@ -17,12 +17,15 @@ try:
 except Exception:
     from tqdm import tqdm
 
-from ._lib import Factor
-from ._lib import replay as _native_replay
+from ._lib import replay as _native_replay, Factor, __build__
 
 
 def _replay_single(
-    dname: str, factors: List[Factor], batch_size: int = 40960, verbose: bool = False
+    dname: str,
+    factors: List[Factor],
+    batch_size: int = 40960,
+    trim: bool = False,
+    verbose: bool = False,
 ) -> Tuple[pa.Table, Set[str]]:
     replay_result = _native_replay(dname, factors, batch_size=batch_size)
 
@@ -53,11 +56,15 @@ def _replay_single(
 
     tb = tb.select(["__index__"] + [str(f) for f in factors])
 
-    tb = tb.slice(
-        np.max(
-            [Factor(col).ready_offset() for col in tb.column_names[1:]]
-        )  # this first one is __index__
-    )
+    if trim:
+        tb = tb.slice(
+            np.max(
+                [
+                    Factor(col).ready_offset()
+                    for col in tb.column_names[1:]  # the first one is __index__
+                ]
+            )
+        )
     return (
         tb,
         {str(factors[k]) for k in replay_result["failed"].keys()},
@@ -70,6 +77,7 @@ async def replay(
     batch_size: int = 40960,
     n_jobs: int = 1,
     pbar: bool = True,
+    trim: bool = False,
     verbose: bool = False,
     output: Literal["pandas", "pyarrow"] = "pandas",
 ) -> Union[pd.DataFrame, pa.Table]:
@@ -88,6 +96,8 @@ async def replay(
         How many datasets to run in parallel. Note that Factors will always being replayed in parallel.
     pbar: bool = True
         Whether to show the progress bar using tqdm.
+    trim: bool = False
+        Whether to trim the warm up period off from the result.
     verbose: bool = False
         If True, failed factors will be printed out in stderr.
     output: Literal["pandas" | "pyarrow"] = "pandas"
@@ -122,6 +132,7 @@ async def replay(
                     dname,
                     [f.clone() for f in factors],
                     batch_size,
+                    trim,
                     verbose,
                 )
             )

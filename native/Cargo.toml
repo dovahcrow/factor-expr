@@ -23,7 +23,11 @@ num-traits = "0.2"
 numpy = "0.13"
 parquet = "3"
 pyo3 = {version = "0.13", features = ["extension-module"]}
+pyo3-built = "0.4"
 rayon = "1"
 thiserror = "1"
 
 [dev-dependencies]
+
+[build-dependencies]
+built = {version = "0.4", features = ["chrono"]}
