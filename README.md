@@ -1,11 +1,16 @@
-# Factor Expr [![status][ci_badge]][ci_page]
+# Factor Expr [![status][ci_badge]][ci_page] [![pypi][pypi_badge]][pypi_page]
 [ci_badge]: https://github.com/dovahcrow/factor-expr/workflows/ci/badge.svg
 [ci_page]: https://github.com/dovahcrow/factor-expr/actions
+[pypi_badge]: https://img.shields.io/pypi/v/factor-expr?color=green&style=flat-square
+[pypi_page]: https://pypi.org/project/factor-expr/
+
 
 Extreme fast factor expression & computation library for Python.
 
 On a server with an E7-4830 CPU (16 cores, 2000MHz),
 replaying 48 factors over a dataset with 24,513,435 rows x 683 columns (12GB) takes 150s.
+
+Join [\[Discussions\]](https://github.com/dovahcrow/factor-expr/discussions) for Q&A and feature proposal!
 
 ## Usage
 
@@ -89,7 +94,8 @@ Notations:
 * `<const>` means a constant, e.g. `3`.
 * `<expr>` means either a constant or an S-Expression or a column name, e.g. `3` or `(+ :close 3)` or `:open`.
 
-Here's the full list of supported functions. If you didn't find one you need, consider creating an issue or PR!
+Here's the full list of supported functions. If you didn't find one you need, 
+consider asking on [Discussions](https://github.com/dovahcrow/factor-expr/discussions) or creating a PR!
 
 ### Arithmetics
 * Addition: `(+ <expr> <expr>)`
