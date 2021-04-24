@@ -24,22 +24,44 @@ There are three steps to use this library.
 
 A tabular format with at least a `time` column is required for the dataset. 
 This means except for the `time` column, you can have other columns with any name you want in the dataset.
-For example, here is an OHLC candle dataset with 1 row:
+For example, here is an OHLC candle dataset with 2 rows:
 
 ```python
     df = pd.DataFrame({
-        "time": [datetime.now()], 
-        "open": [3.1], 
-        "high": [8.8], 
-        "low": [1.1], 
-        "close": [4.4]
+        "time": [DateTime(2021,4,23), DateTime(2021,4,24)], 
+        "open": [3.1, 5.8], 
+        "high": [8.8, 7.7], 
+        "low": [1.1, 2.1], 
+        "close": [4.4, 3.4]
     })
 ```
 
 You can use the following code to store the DataFrame into a Parquet file:
 ```python
-df.to_parquet("data.pq")
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+tb = pa.Table.from_pandas(df)
+tb = tb.cast(
+    pa.schema(
+        [
+            ("time", pa.timestamp("ms")),
+            ("open", pa.float64()),
+            ("high", pa.float64()),
+            ("low", pa.float64()),
+            ("close", pa.float64()),
+        ]
+    )
+)
+pq.write_table(tb, f"data.pq", version="2.0")
 ```
+
+Several things need to be noticed:
+1. The time column is required and the data type must be `pa.timestamp("ms")`.
+2. Other columns must have the `pa.float64()` data type.
+3. The version for the Parquet file must be "2.0".
+   
+In the future 1 and 3 might be relaxed.
 
 ### 2. Define your factors
 
@@ -76,10 +98,10 @@ In case of multiple datasets are passed in, the results will be concatenated wit
 
 For example, the code above will give you a DataFrame looks similar to this:
 
-| __index__                  | (TSLogReturn 30 :close) |
-| -------------------------- | ----------------------- |
-| 2021-04-24 03:28:19.763974 | 0.23                    |
-| ...                        | ...                     |
+| __index__  | (TSLogReturn 30 :close) |
+| ---------- | ----------------------- |
+| 2021-04-24 | 0.23                    |
+| ...        | ...                     |
 
 Checkout the docstring of `replay` for more information!
 
