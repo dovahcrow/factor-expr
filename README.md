@@ -51,12 +51,12 @@ A dataset is a tabular format with float64 columns and arbitrary column names.
 For example, here is an OHLC candle dataset with 2 rows:
 
 ```python
-    df = pd.DataFrame({
-        "open": [3.1, 5.8], 
-        "high": [8.8, 7.7], 
-        "low": [1.1, 2.1], 
-        "close": [4.4, 3.4]
-    })
+df = pd.DataFrame({
+    "open": [3.1, 5.8], 
+    "high": [8.8, 7.7], 
+    "low": [1.1, 2.1], 
+    "close": [4.4, 3.4]
+})
 ```
 
 You can use the following code to store the DataFrame into a Parquet file:
