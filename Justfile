@@ -16,3 +16,15 @@ build-wheel: build-extension
 
 test +ARGS="": build-extension
   cd python && poetry run pytest factor_expr/tests {{ARGS}}
+
+prerelease:
+  git checkout prerelease
+  git merge master
+  git push
+  git checkout master
+
+release:
+  git checkout release
+  git merge prerelease
+  git push
+  git checkout master
