@@ -177,8 +177,13 @@ All the window functions take a window size as the first argument. The computati
 * Rolling correlation between two series: `(TSCorrelation <const> <expr> <expr>)`
 
 #### Warm-up Period for Window Functions
+
 Factors containing window functions require a warm-up period. For example, for
 `(TSSum 10 :close)`, it will not generate data until the 10th tick is replayed.
-In this case, `replay` will write `NaN` into the result by default,
-so that the length of the output will be the same as the input dataset. You can use the `trim`
-parameter to control this behaviour.
+In this case, `replay` will write `NaN` into the result during the warm-up period, until the factor starts to produce data.
+This ensures the length of the factor output will be as same as the length of the input dataset. You can use the `trim`
+parameter to let replay trim off the warm-up period before it returns.
+
+### Factors Failed to Compute
+
+`Factor Expr` guarantees that there will not be any `inf`, `-inf` or `NaN` appear in the result, except for the warm-up period. However, sometimes a factor can fail due to numerical issues. For example, `(Pow 3 (Pow 3 (Pow 3 :volume)))` might overflow and become `inf` and `1 / inf` will become `NaN`. `Factor Expr` will detect these situations and mark these factors as failed. The failed factors will still be returned in the replay result, but the values in that column will be all `NaN`. You can easily remove these failed factor results by using `pd.DataFrame.dropna(axis=0, how="all")`.
