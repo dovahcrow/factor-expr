@@ -28,7 +28,7 @@
 Extreme fast factor expression & computation library for Python.
 
 On a server with an E7-4830 CPU (16 cores, 2000MHz),
-replaying 48 factors over a dataset with 24,513,435 rows x 683 columns (12GB) takes 150s.
+computing 48 factors over a dataset with 24,513,435 rows x 683 columns (12GB) takes 150s.
 
 Join [\[Discussions\]](https://github.com/dovahcrow/factor-expr/discussions) for Q&A and feature proposal!
 
