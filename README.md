@@ -25,19 +25,24 @@
 
 ----------
 
-Extreme fast factor expression & computation library for Python.
+Extreme fast factor expression & computation library for quantitative trading in Python.
 
 On a server with an E7-4830 CPU (16 cores, 2000MHz),
 computing 48 factors over a dataset with 24,513,435 rows x 683 columns (12GB) takes 150s.
 
 Join [\[Discussions\]](https://github.com/dovahcrow/factor-expr/discussions) for Q&A and feature proposal!
 
+## Features
+
+* Express factors in [S-Expression](https://en.wikipedia.org/wiki/S-expression).
+* Compute factors in parallel over multiple factors and multiple datasets.
+  
 ## Usage
 
 There are three steps to use this library.
 
-1. Prepare your dataset into a file. Currently, only the [Parquet](https://parquet.apache.org/) format is supported.
-2. Define your factors using [S-Expression](https://en.wikipedia.org/wiki/S-expression).
+1. Prepare the datasets into files. Currently, only the [Parquet](https://parquet.apache.org/) format is supported.
+2. Define factors using [S-Expression](https://en.wikipedia.org/wiki/S-expression).
 3. Run `replay` to compute the factors on the dataset.
 
 ### 1. Prepare the dataset
