@@ -296,4 +296,5 @@ async def replay(
         If True, failed factors will be printed out in stderr.
     output: Literal["pandas" | "pyarrow"] = "pandas"
         The return format, can be pandas DataFrame ("pandas") or pyarrow Table ("pyarrow").
+    """
 ```
