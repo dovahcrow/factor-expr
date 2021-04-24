@@ -36,7 +36,7 @@ jobs:
       - name: Install Factor Expr - POSIX
         if: ${{ matrix.os != 'windows-latest' }}
         run: |
-          pip install pandas numpy importlib-metadata
+          pip install pandas numpy pyarrow tqdm
 
           version='${{ github.event.inputs.version }}'
           if [ -z $version ]
