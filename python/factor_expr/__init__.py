@@ -1,11 +1,15 @@
 from asyncio import get_event_loop
 from concurrent.futures import ThreadPoolExecutor
+from importlib.metadata import version
 from sys import stderr
-from typing import List, Literal, Set, Tuple, Union, Iterable
+from typing import Iterable, List, Literal, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+
+from ._lib import Factor, __build__
+from ._lib import replay as _native_replay
 
 try:
     from IPython import get_ipython
@@ -17,7 +21,7 @@ try:
 except Exception:
     from tqdm import tqdm
 
-from ._lib import replay as _native_replay, Factor, __build__
+__version__ = version(__name__)
 
 
 def _replay_single(
