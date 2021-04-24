@@ -169,11 +169,11 @@ parameter to let replay trim off the warm-up period before it returns.
 
 `Factor Expr` guarantees that there will not be any `inf`, `-inf` or `NaN` appear in the result, except for the warm-up period. However, sometimes a factor can fail due to numerical issues. For example, `(Pow 3 (Pow 3 (Pow 3 :volume)))` might overflow and become `inf`, and `1 / inf` will become `NaN`. `Factor Expr` will detect these situations and mark these factors as failed. The failed factors will still be returned in the replay result, but the values in that column will be all `NaN`. You can easily remove these failed factors from the result by using `pd.DataFrame.dropna(axis=1, how="all")`.
 
-### API
+## API
 
 There are two components in `Factor Expr`, a `Factor` class and a `replay` function.
 
-#### Factor
+### Factor
 
 The factor class takes an S-Expression to construct. It has the following signature:
 
@@ -252,7 +252,7 @@ class Factor:
         """Create a copy of itself."""
 ```
 
-#### replay
+### replay
 
 Replay has the following signature:
 
