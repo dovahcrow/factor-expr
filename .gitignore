@@ -1,0 +1,7 @@
+.env
+target
+.venv
+__pycache__
+dist
+**/factor_expr/*.so
+.pytest_cache

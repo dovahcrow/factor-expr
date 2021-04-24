@@ -1,0 +1,29 @@
+[package]
+authors = ["Weiyuan Wu <youngw@sfu.ca>"]
+edition = "2018"
+name = "factor-expr"
+version = "0.1.0"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+name = "factor_expr"
+
+[dependencies]
+anyhow = "1"
+arrow = "3"
+chrono = "0.4"
+dict_derive = "0.3"
+dyn-clone = "1"
+fehler = "1"
+itertools = "0.8"
+lexpr = "0.2"
+ndarray = "0.14"
+num = "0.3"
+num-traits = "0.2"
+numpy = "0.13"
+parquet = "3"
+pyo3 = {version = "0.13", features = ["extension-module"]}
+rayon = "1"
+thiserror = "1"
+
+[dev-dependencies]

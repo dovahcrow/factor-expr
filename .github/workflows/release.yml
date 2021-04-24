@@ -1,0 +1,150 @@
+name: release
+
+on: 
+  push:
+    branches:
+      - prerelease
+      - release
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    strategy:
+      matrix:
+        python-version: [ 37, 38, 39 ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set python version
+        run: |
+          if [[ "${{ matrix.python-version }}" == "37" ]]; then
+            echo "/opt/python/cp37-cp37m/bin" >> $GITHUB_PATH
+          else
+            echo "/opt/python/cp${{ matrix.python-version }}-cp${{ matrix.python-version }}/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Check which python we use
+        run: | 
+          echo $(which python)
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-02-15
+          components: rustfmt
+          default: true
+
+      - name: Install tools
+        run: |
+          pip install poetry
+          cargo install just
+          yum install -y openssl-devel
+
+      - name: Setup project
+        env: 
+          RUSTFLAGS: "-C link-arg=-s"
+        run: |
+          just bootstrap-python
+          just ci-build-python-extention
+          echo "Content of the source folder"
+          ls connectorx-python/connectorx
+
+      - name: Build wheel
+        run: |
+          just ci-build-python-wheel ci-rename-wheel
+          echo "Built artifacts"
+          ls connectorx-python/dist
+
+      - name: Persist artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: "linux-${{ matrix.python-version }}"
+          path: connectorx-python/dist/*.whl
+          
+  win32-and-darwin:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-10.15, windows-latest]
+        python-version: ["3.7", "3.8", "3.9"]
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+
+      - name: Check which python we use
+        run: | 
+          echo $(which python)
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-02-15
+          components: rustfmt
+          default: true
+
+      - name: Install tools
+        run: |
+          pip install poetry
+          cargo install cargo-quickinstall
+          cargo quickinstall just
+
+      - name: Setup project
+        run: |
+          just bootstrap-python
+          just ci-build-python-extention
+          echo "Content of the source folder"
+          ls connectorx-python/connectorx
+
+      - name: Build wheel
+        run: |
+          just ci-build-python-wheel ci-rename-wheel
+          echo "Built artifacts"
+          ls connectorx-python/dist
+
+      - name: Persist artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: "${{ matrix.os }}-${{ matrix.python-version }}"
+          path: connectorx-python/dist/*.whl
+
+  upload:
+    runs-on: ubuntu-latest
+    needs: [win32-and-darwin, linux]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Setup environment
+        run: |
+            tree .
+            echo "/home/runner/.local/bin" >> $GITHUB_PATH
+
+      - name: Install Twine
+        run: pip install twine
+
+      - name: Upload to PyPI site
+        if: github.ref == 'refs/heads/release'
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          for file in $(ls **/*.whl)
+          do
+            twine upload --non-interactive -u __token__ -p $PYPI_TOKEN $file || continue
+          done
+          
+      - name: Upload to PyPI test site
+        if: github.ref == 'refs/heads/prerelease'
+        env:
+          PYPI_TEST_TOKEN: ${{ secrets.PYPI_TEST_TOKEN }}
+        run: |
+          for file in $(ls **/*.whl)
+          do
+            twine upload --non-interactive --repository-url https://test.pypi.org/legacy/ -u __token__ -p $PYPI_TEST_TOKEN $file || continue
+          done
+
+      
