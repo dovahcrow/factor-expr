@@ -1,5 +1,5 @@
 [tool.poetry]
-authors = ["Weiyuan Wu <youngw@sfu.ca>"] 
+authors = ["Weiyuan Wu <youngw@sfu.ca>"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Topic :: Software Development :: Build Tools",
@@ -9,14 +9,14 @@ classifiers = [
   "Intended Audience :: Developers",
   "Intended Audience :: Financial and Insurance Industry",
   "Topic :: Scientific/Engineering",
-] 
-description = "Extreme fast factor expression & computation library for Python." 
-include = ["factor_expr/*.so", "factor_expr/*.pyd"] 
-keywords = ["factor", "expression", "alpha", "S-expression", "quantative trading", "trading", "algotrading"] 
-license = "MIT" 
-name = "factor_expr" 
-readme = "README.md" # Markdown files are supported
-version = "0.1.1-alpha.1" 
+]
+description = "Extreme fast factor expression & computation library for Python."
+include = ["factor_expr/*.so", "factor_expr/*.pyd"]
+keywords = ["factor", "expression", "alpha", "S-expression", "quantative trading", "trading", "algotrading"]
+license = "MIT"
+name = "factor_expr"
+readme = "README.md"
+version = "0.1.1"
 
 [tool.poetry.dependencies]
 numpy = "^1"
