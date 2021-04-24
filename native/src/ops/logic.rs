@@ -90,19 +90,19 @@ impl<T: TickerBatch> Operator<T> for If<T> {
         self.cond.len() + self.btrue.len() + self.bfalse.len() + 1
     }
 
-    fn children_indices(&self) -> Vec<usize> {
+    fn child_indices(&self) -> Vec<usize> {
         let ncond = self.cond.len();
         let nbtrue = self.btrue.len();
 
         vec![1, ncond + 1, ncond + nbtrue + 1]
     }
 
-    fn symbols(&self) -> Vec<String> {
+    fn columns(&self) -> Vec<String> {
         self.cond
-            .symbols()
+            .columns()
             .into_iter()
-            .chain(self.btrue.symbols())
-            .chain(self.bfalse.symbols())
+            .chain(self.btrue.columns())
+            .chain(self.bfalse.columns())
             .collect()
     }
 
@@ -255,15 +255,15 @@ macro_rules! impl_logic_bivariate {
                     self.l.len() + self.r.len() + 1
                 }
 
-                fn children_indices(&self) -> Vec<usize> {
+                fn child_indices(&self) -> Vec<usize> {
                     vec![1, self.l.len() + 1]
                 }
 
-                fn symbols(&self) -> Vec<String> {
+                fn columns(&self) -> Vec<String> {
                     self.l
-                        .symbols()
+                        .columns()
                         .into_iter()
-                        .chain(self.r.symbols())
+                        .chain(self.r.columns())
                         .collect()
                 }
 
@@ -409,12 +409,12 @@ impl<T: TickerBatch> Operator<T> for Not<T> {
         self.s.len() + 1
     }
 
-    fn children_indices(&self) -> Vec<usize> {
+    fn child_indices(&self) -> Vec<usize> {
         vec![1]
     }
 
-    fn symbols(&self) -> Vec<String> {
-        self.s.symbols()
+    fn columns(&self) -> Vec<String> {
+        self.s.columns()
     }
 
     #[throws(as Option)]

@@ -61,11 +61,11 @@ impl<T: TickerBatch> Operator<T> for Getter {
         1
     }
 
-    fn children_indices(&self) -> Vec<usize> {
+    fn child_indices(&self) -> Vec<usize> {
         vec![]
     }
 
-    fn symbols(&self) -> Vec<String> {
+    fn columns(&self) -> Vec<String> {
         vec![self.name.clone()]
     }
 

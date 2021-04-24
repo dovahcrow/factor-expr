@@ -26,11 +26,11 @@ impl<T: TickerBatch> Operator<T> for f64 {
         1
     }
 
-    fn children_indices(&self) -> Vec<usize> {
+    fn child_indices(&self) -> Vec<usize> {
         vec![]
     }
 
-    fn symbols(&self) -> Vec<String> {
+    fn columns(&self) -> Vec<String> {
         vec![]
     }
 
@@ -45,6 +45,6 @@ impl<T: TickerBatch> Operator<T> for f64 {
 
     #[throws(as Option)]
     fn insert(&mut self, _: usize, _: BoxOp<T>) -> BoxOp<T> {
-        unreachable!("insert subtree into root");
+        unreachable!("cannot insert root");
     }
 }

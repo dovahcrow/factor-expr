@@ -1,10 +1,7 @@
 use crate::ops::Operator;
 use anyhow::{Error, Result};
 use arrow::{
-    array::{
-        as_primitive_array, Float64Array, Float64Builder, Int64Array, Int64Builder,
-        TimestampMillisecondArray,
-    },
+    array::{Float64Array, Float64Builder},
     record_batch::RecordBatch,
 };
 use fehler::throws;
@@ -14,7 +11,7 @@ use parquet::{
     file::reader::FileReader,
 };
 use rayon::prelude::*;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::sync::Arc;
 
@@ -25,11 +22,7 @@ pub fn replay<O>(
     file: &str,
     mut ops: Vec<&mut (dyn Operator<RecordBatch>)>,
     batch_size: O,
-) -> (
-    Int64Array,
-    BTreeMap<usize, Float64Array>,
-    BTreeMap<usize, Error>,
-)
+) -> (usize, HashMap<usize, Float64Array>, HashMap<usize, Error>)
 where
     O: Into<Option<usize>>,
 {
@@ -46,12 +39,11 @@ where
 
     let schema = arrow_reader.get_schema()?;
     // Only read columns that we used
-    let mut column_indices = ops
+    let column_indices = ops
         .iter()
-        .flat_map(|op| op.symbols())
+        .flat_map(|op| op.columns())
         .map(|sym| schema.index_of(&sym))
         .collect::<Result<HashSet<usize>, _>>()?;
-    column_indices.insert(schema.index_of("time")?);
 
     let record_batch_reader = arrow_reader
         .get_record_reader_by_columns(
@@ -64,17 +56,11 @@ where
         .into_par_iter()
         .map(|_| Float64Builder::new(nrows))
         .collect();
-    let mut index_builder = Int64Builder::new(nrows);
 
-    let mut failed = BTreeMap::new();
+    let mut failed = HashMap::new();
 
     for maybe_record_batch in record_batch_reader {
         let record_batch = maybe_record_batch.unwrap();
-
-        let schema = record_batch.schema();
-        let timecol = record_batch.column(schema.index_of("time")?);
-        let timecol: &TimestampMillisecondArray = as_primitive_array(&timecol);
-        index_builder.append_slice(timecol.values())?;
 
         let results: Vec<_> = ops
             .par_iter_mut()
@@ -98,7 +84,7 @@ where
     }
 
     (
-        index_builder.finish(),
+        nrows,
         builders
             .into_iter()
             .enumerate()

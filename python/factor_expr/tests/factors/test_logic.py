@@ -12,7 +12,12 @@ def test_gt():
     df = pd.read_parquet(FILENAME)
 
     result = asyncio.run(
-        replay([FILENAME], [Factor("(> :price_ask_l1_open 0)")], pbar=False)
+        replay(
+            [FILENAME],
+            [Factor("(> :price_ask_l1_open 0)")],
+            pbar=False,
+            index_col="time",
+        )
     )
 
     assert ((df.price_ask_l1_open > 0).values == result.iloc[:, 0].values).all()
@@ -22,7 +27,12 @@ def test_gte():
     df = pd.read_parquet(FILENAME)
 
     result = asyncio.run(
-        replay([FILENAME], [Factor("(>= :price_ask_l1_low 0)")], pbar=False)
+        replay(
+            [FILENAME],
+            [Factor("(>= :price_ask_l1_low 0)")],
+            pbar=False,
+            index_col="time",
+        )
     )
 
     assert ((df.price_ask_l1_low >= 0).values == result.iloc[:, 0].values).all()
@@ -32,7 +42,12 @@ def test_lt():
     df = pd.read_parquet(FILENAME)
 
     result = asyncio.run(
-        replay([FILENAME], [Factor("(< :price_ask_l1_high 0)")], pbar=False)
+        replay(
+            [FILENAME],
+            [Factor("(< :price_ask_l1_high 0)")],
+            pbar=False,
+            index_col="time",
+        )
     )
 
     assert ((df.price_ask_l1_high < 0).values == result.iloc[:, 0].values).all()
@@ -42,7 +57,12 @@ def test_lte():
     df = pd.read_parquet(FILENAME)
 
     result = asyncio.run(
-        replay([FILENAME], [Factor("(<= :price_ask_l1_close 0)")], pbar=False)
+        replay(
+            [FILENAME],
+            [Factor("(<= :price_ask_l1_close 0)")],
+            pbar=False,
+            index_col="time",
+        )
     )
 
     assert ((df.price_ask_l1_close <= 0).values == result.iloc[:, 0].values).all()
@@ -108,6 +128,7 @@ def test_if():
                 )
             ],
             pbar=False,
+            index_col="time",
         )
     )
 

@@ -72,15 +72,15 @@ macro_rules! impl_arithmetic_bivariate {
                     self.l.len() + self.r.len() + 1
                 }
 
-                fn children_indices(&self) -> Vec<usize> {
+                fn child_indices(&self) -> Vec<usize> {
                     vec![1, self.l.len() + 1]
                 }
 
-                fn symbols(&self) -> Vec<String> {
+                fn columns(&self) -> Vec<String> {
                     self.l
-                        .symbols()
+                        .columns()
                         .into_iter()
-                        .chain(self.r.symbols())
+                        .chain(self.r.columns())
                         .collect()
                 }
 
@@ -223,12 +223,12 @@ macro_rules! impl_arithmetic_univariate {
                     self.s.len() + 1
                 }
 
-                fn children_indices(&self) -> Vec<usize> {
+                fn child_indices(&self) -> Vec<usize> {
                     vec![1]
                 }
 
-                fn symbols(&self) -> Vec<String> {
-                    self.s.symbols()
+                fn columns(&self) -> Vec<String> {
+                    self.s.columns()
                 }
 
                 #[throws(as Option)]
@@ -355,12 +355,12 @@ macro_rules! impl_arithmetic_univariate_1arg {
                     self.s.len() + 1
                 }
 
-                fn children_indices(&self) -> Vec<usize> {
+                fn child_indices(&self) -> Vec<usize> {
                     vec![1]
                 }
 
-                fn symbols(&self) -> Vec<String> {
-                    self.s.symbols()
+                fn columns(&self) -> Vec<String> {
+                    self.s.columns()
                 }
 
                 #[throws(as Option)]

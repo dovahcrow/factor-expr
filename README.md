@@ -47,13 +47,11 @@ There are three steps to use this library.
 
 ### 1. Prepare the dataset
 
-A tabular format with at least a `time` column is required for the dataset. 
-This means except for the `time` column, you can have other columns with any name you want in the dataset.
+A dataset is a tabular format with float64 columns and arbitrary column names.
 For example, here is an OHLC candle dataset with 2 rows:
 
 ```python
     df = pd.DataFrame({
-        "time": [DateTime(2021,4,23), DateTime(2021,4,24)], 
         "open": [3.1, 5.8], 
         "high": [8.8, 7.7], 
         "low": [1.1, 2.1], 
@@ -63,30 +61,8 @@ For example, here is an OHLC candle dataset with 2 rows:
 
 You can use the following code to store the DataFrame into a Parquet file:
 ```python
-import pyarrow as pa
-import pyarrow.parquet as pq
-
-tb = pa.Table.from_pandas(df)
-tb = tb.cast(
-    pa.schema(
-        [
-            ("time", pa.timestamp("ms")),
-            ("open", pa.float64()),
-            ("high", pa.float64()),
-            ("low", pa.float64()),
-            ("close", pa.float64()),
-        ]
-    )
-)
-pq.write_table(tb, f"data.pq", version="2.0")
+df.to_parquet("data.pq")
 ```
-
-Several things need to be noticed:
-1. The time column is required and the data type must be `pa.timestamp("ms")`.
-2. Other columns must have the `pa.float64()` data type.
-3. The version for the Parquet file must be "2.0".
-   
-In the future 1 and 3 might be relaxed.
 
 ### 2. Define your factors
 
@@ -108,7 +84,7 @@ Following step 1 and 2, you can now compute the factors using the `replay` funct
 ```python
 from factor_expr import Factor, replay
 
-result = replay(
+result = await replay(
     ["data.pq"],
     [Factor("(TSLogReturn 30 :close)")]
 )
@@ -121,10 +97,10 @@ In case of multiple datasets are passed in, the results will be concatenated wit
 
 For example, the code above will give you a DataFrame looks similar to this:
 
-| __index__  | (TSLogReturn 30 :close) |
-| ---------- | ----------------------- |
-| 2021-04-24 | 0.23                    |
-| ...        | ...                     |
+| index | (TSLogReturn 30 :close) |
+| ----- | ----------------------- |
+| 0     | 0.23                    |
+| ...   | ...                     |
 
 Checkout the docstring of `replay` for more information!
 
@@ -192,3 +168,129 @@ parameter to let replay trim off the warm-up period before it returns.
 ### Factors Failed to Compute
 
 `Factor Expr` guarantees that there will not be any `inf`, `-inf` or `NaN` appear in the result, except for the warm-up period. However, sometimes a factor can fail due to numerical issues. For example, `(Pow 3 (Pow 3 (Pow 3 :volume)))` might overflow and become `inf` and `1 / inf` will become `NaN`. `Factor Expr` will detect these situations and mark these factors as failed. The failed factors will still be returned in the replay result, but the values in that column will be all `NaN`. You can easily remove these failed factor results by using `pd.DataFrame.dropna(axis=0, how="all")`.
+
+### API
+
+There are two components in `Factor Expr`, a `Factor` class and a `replay` function.
+
+#### Factor
+
+The factor class takes an S-Expression to construct. It has the following signature:
+
+```python
+class Factor:
+    def __init__(sexpr: str) -> None:
+        """Construct a Factor using an S-Expression"""
+
+    def ready_offset(self) -> int:
+        """Returns the first index after the warm-up period. 
+        For non-window functioins, this will always return 0."""
+
+    def __len__(self) -> int:
+        """Returns how many subtrees contained in this factor tree.
+
+        Example
+        -------
+        `(+ (/ :close :open) :high)` has 5 subtrees, namely:
+        1. (+ (/ :close :open) :high)
+        2. (/ :close :open)
+        3. :close
+        4. :open
+        5. :high
+        """
+
+    def __getitem__(self, i:int) -> Factor:
+        """Get the i-th subtree of the sequence from the pre-order traversal of the factor tree.
+
+        Example
+        -------
+        `(+ (/ :close :open) :high)` is traversed as:
+        0. (+ (/ :close :open) :high)
+        1. (/ :close :open)
+        2. :close
+        3. :open
+        4. :high
+
+        Consequently, f[2] will give you `Factor(":close")`.
+        """
+
+    def depth(self) -> int:
+        """How deep is this factor tree.
+
+        Example
+        -------
+        `(+ (/ :close :open) :high)` has a depth of 2, namely:
+        1. (+ (/ :close :open) :high)
+        2. (/ :close :open)
+        """
+
+    def child_indices(self) -> List[int]:
+        """The indices for the children of this factor tree.
+
+        Example
+        -------
+        The child_indices result of `(+ (/ :close :open) :high)` is [1, 4]
+        """
+        
+    def replace(self, i: int, other: Factor) -> Factor:
+        """Replace the i-th node with another subtree.
+
+        Example
+        -------
+        `Factor("+ (/ :close :open) :high").replace(4, Factor("(- :high :low)")) == Factor("+ (/ :close :open) (- :high :low)")`
+        """
+
+    def columns(self) -> List[str]:
+        """Return all the columns that are used by this factor.
+
+        Example
+        -------
+        `(+ (/ :close :open) :high)` uses [:close, :open, :high].
+        """
+    
+    def clone(self) -> Factor:
+        """Create a copy of itself."""
+```
+
+#### replay
+
+Replay has the following signature:
+
+```python
+async def replay(
+    files: Iterable[str],
+    factors: List[Factor],
+    *,
+    batch_size: int = 40960,
+    n_jobs: int = 1,
+    pbar: bool = True,
+    trim: bool = False,
+    index_col: Optional[str] = None,
+    verbose: bool = False,
+    output: Literal["pandas", "pyarrow"] = "pandas",
+) -> Union[pd.DataFrame, pa.Table]:
+    """
+    Replay a list of factors on a bunch of data.
+
+    Parameters
+    ----------
+    files: Iterable[str]
+        Paths to the datasets. Currently only parquet format is supported.
+    factors: List[Factor]
+        A list of Factors to replay on the given set of files.
+    batch_size: int = 40960
+        How many rows to replay at one time. Default is 40960 rows.
+    n_jobs: int = 1
+        How many datasets to run in parallel. Note that Factors will always being replayed in parallel.
+    pbar: bool = True
+        Whether to show the progress bar using tqdm.
+    trim: bool = False
+        Whether to trim the warm up period off from the result.
+    index_col: Optional[str] = None
+        Set the index column.
+    verbose: bool = False
+        If True, failed factors will be printed out in stderr.
+    output: Literal["pandas" | "pyarrow"] = "pandas"
+        The return format, can be pandas DataFrame ("pandas") or pyarrow Table ("pyarrow").
+    """
+```

@@ -38,9 +38,9 @@ impl<T: TickerBatch> Parameter<T> {
 }
 
 #[throws(Error)]
-pub fn from_str<T: TickerBatch>(repr: &str) -> BoxOp<T> {
-    let expr = lexpr::from_str(repr)?;
-    let expr = match expr {
+pub fn from_str<T: TickerBatch>(sexpr: &str) -> BoxOp<T> {
+    let sexpr = lexpr::from_str(sexpr)?;
+    let sexpr = match sexpr {
         Value::Bool(b) => throw!(anyhow!("unexpected bool {}", b)),
         Value::Bytes(b) => throw!(anyhow!("unexpected bytes {:?}", b)),
         Value::Char(c) => throw!(anyhow!("unexpected char {}", c)),
@@ -58,13 +58,13 @@ pub fn from_str<T: TickerBatch>(repr: &str) -> BoxOp<T> {
         _ => throw!(anyhow!("unexpected value")),
     };
 
-    visit(expr)?
+    visit(sexpr)?
 }
 
 #[throws(Error)]
-fn visit<T: TickerBatch>(expr: Cons) -> BoxOp<T> {
-    let expr = expr.to_vec().0;
-    let (func, params) = match &*expr {
+fn visit<T: TickerBatch>(sexpr: Cons) -> BoxOp<T> {
+    let sexpr = sexpr.to_vec().0;
+    let (func, params) = match &*sexpr {
         [func, params @ ..] => (func, params),
         _ => unimplemented!(),
     };

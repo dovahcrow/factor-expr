@@ -140,12 +140,12 @@ macro_rules! impl_minmax {
                     self.s.len() + 1
                 }
 
-                fn children_indices(&self) -> Vec<usize> {
+                fn child_indices(&self) -> Vec<usize> {
                     vec![1]
                 }
 
-                fn symbols(&self) -> Vec<String> {
-                    self.s.symbols()
+                fn columns(&self) -> Vec<String> {
+                    self.s.columns()
                 }
 
                 #[throws(as Option)]

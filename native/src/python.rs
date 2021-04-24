@@ -6,16 +6,16 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::{class::basic::CompareOp, PyObjectProtocol, PySequenceProtocol};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 type ArrowFFIPtr = (usize, usize);
 
 #[derive(IntoPyObject)]
 pub struct ReplayResult {
-    index: ArrowFFIPtr,
-    succeeded: BTreeMap<usize, ArrowFFIPtr>,
-    failed: BTreeMap<usize, String>,
+    nrows: usize,
+    succeeded: HashMap<usize, ArrowFFIPtr>,
+    failed: HashMap<usize, String>,
 }
 
 #[pyclass]
@@ -26,9 +26,9 @@ pub struct Factor {
 #[pymethods]
 impl Factor {
     #[new]
-    pub fn new(repr: &str) -> PyResult<Self> {
+    pub fn new(sexpr: &str) -> PyResult<Self> {
         Ok(Self {
-            op: from_str(repr).map_err(|e| PyValueError::new_err(format!("{}", e)))?,
+            op: from_str(sexpr).map_err(|e| PyValueError::new_err(format!("{}", e)))?,
         })
     }
 
@@ -36,7 +36,7 @@ impl Factor {
         self.op.ready_offset()
     }
 
-    pub fn insert<'p>(&self, i: usize, other: PyRef<'p, Factor>) -> PyResult<Factor> {
+    pub fn replace<'p>(&self, i: usize, other: PyRef<'p, Factor>) -> PyResult<Factor> {
         if i == 0 {
             return Ok(Factor {
                 op: other.op.clone(),
@@ -44,7 +44,8 @@ impl Factor {
         }
 
         let mut op = self.op.clone();
-        op.insert(i, other.op.clone())
+        let _ = op
+            .insert(i, other.op.clone())
             .ok_or_else(|| PyValueError::new_err(format!("idx {} overflows", i)))?;
         Ok(Factor { op })
     }
@@ -53,12 +54,12 @@ impl Factor {
         self.op.depth()
     }
 
-    pub fn children_indices(&self) -> Vec<usize> {
-        self.op.children_indices()
+    pub fn child_indices(&self) -> Vec<usize> {
+        self.op.child_indices()
     }
 
-    pub fn symbols(&self) -> Vec<String> {
-        self.op.symbols()
+    pub fn columns(&self) -> Vec<String> {
+        self.op.columns()
     }
 
     pub fn clone(&self) -> Factor {
@@ -132,14 +133,13 @@ pub fn replay<'py>(
         .map(|f| (&mut *f.op) as &mut dyn Operator<RecordBatch>)
         .collect();
 
-    let (index, succeeded, failed) = py.allow_threads(|| {
+    let (nrows, succeeded, failed) = py.allow_threads(|| {
         super::replay::replay(file, ops, batch_size)
             .map_err(|e| PyValueError::new_err(format!("{}", e)))
     })?;
 
-    let (p1, p2) = index.to_raw().unwrap();
     Ok(ReplayResult {
-        index: (p1 as usize, p2 as usize),
+        nrows,
         succeeded: succeeded
             .into_iter()
             .map(|(k, v)| {

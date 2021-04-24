@@ -16,6 +16,7 @@ def test_add():
             [FILENAME],
             [Factor("(+ :price_ask_l1_high :price_bid_l1_open)")],
             pbar=False,
+            index_col="time",
         )
     )
 
@@ -33,6 +34,7 @@ def test_sub():
             [FILENAME],
             [Factor("(- :price_ask_l1_open :price_bid_l1_open)")],
             pbar=False,
+            index_col="time",
         )
     )
 
@@ -65,6 +67,7 @@ def test_div():
             [FILENAME],
             [Factor("(/ :price_ask_l1_close :price_bid_l1_high)")],
             pbar=False,
+            index_col="time",
         )
     )
 
