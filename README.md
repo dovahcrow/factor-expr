@@ -102,7 +102,7 @@ For example, the code above will give you a DataFrame looks similar to this:
 | 0     | 0.23                    |
 | ...   | ...                     |
 
-Check out the docstring of `replay` for more information!
+Check out the [docstring](#replay) of `replay` for more information!
 
 ## Installation
 
