@@ -4,6 +4,26 @@
 [pypi_badge]: https://img.shields.io/pypi/v/factor-expr?color=green&style=flat-square
 [pypi_page]: https://pypi.org/project/factor-expr/
 
+<center>
+<table>
+<tr>
+<th>Factor Expression</th>
+<th>+</th>
+<th>Historical Data</th>
+<th>=</th>
+<th>Factor Values</th>
+</tr>
+<tr>
+<td>(TSLogReturn 30 :close)</td>
+<td>+</td>
+<td>2019-12-27~2020-01-14.pq</td>
+<td>=</td>
+<td>[0.01, 0.035, ...]</td>
+</tr>
+</table>
+</center>
+
+----------
 
 Extreme fast factor expression & computation library for Python.
 
@@ -65,16 +85,14 @@ In the future 1 and 3 might be relaxed.
 
 ### 2. Define your factors
 
-Using `Factor Expr`, you can easily define your factors in S-Expression. 
-For example, the 30 days log return on the column `close` can be expressed as:
+`Factor Expr` uses the S-Expression to describe a factor. 
+For example, on a daily OHLC dataset, the 30 days log return on the column `close` is expressed as:
 
 ```python
 from factor_expr import Factor
 
 Factor("(TSLogReturn 30 :close)")
 ```
-
-if each row in your dataset represents a 1-day OHLC candle. 
 
 Note, in `Factor Expr`, column names are referred to by using `:column-name`.
 
