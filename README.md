@@ -165,9 +165,9 @@ In this case, `replay` will write `NaN` into the result during the warm-up perio
 This ensures the length of the factor output will be as same as the length of the input dataset. You can use the `trim`
 parameter to let replay trim off the warm-up period before it returns.
 
-### Factors Failed to Compute
+## Factors Failed to Compute
 
-`Factor Expr` guarantees that there will not be any `inf`, `-inf` or `NaN` appear in the result, except for the warm-up period. However, sometimes a factor can fail due to numerical issues. For example, `(Pow 3 (Pow 3 (Pow 3 :volume)))` might overflow and become `inf` and `1 / inf` will become `NaN`. `Factor Expr` will detect these situations and mark these factors as failed. The failed factors will still be returned in the replay result, but the values in that column will be all `NaN`. You can easily remove these failed factor results by using `pd.DataFrame.dropna(axis=0, how="all")`.
+`Factor Expr` guarantees that there will not be any `inf`, `-inf` or `NaN` appear in the result, except for the warm-up period. However, sometimes a factor can fail due to numerical issues. For example, `(Pow 3 (Pow 3 (Pow 3 :volume)))` might overflow and become `inf`, and `1 / inf` will become `NaN`. `Factor Expr` will detect these situations and mark these factors as failed. The failed factors will still be returned in the replay result, but the values in that column will be all `NaN`. You can easily remove these failed factors from the result by using `pd.DataFrame.dropna(axis=1, how="all")`.
 
 ### API
 
