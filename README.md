@@ -288,6 +288,7 @@ async def replay(
     files: Iterable[str],
     factors: List[Factor],
     *,
+    predicate: Optional[Factor] = None,
     batch_size: int = 40960,
     n_data_jobs: int = 1,
     n_factor_jobs: int = 1,
@@ -306,6 +307,8 @@ async def replay(
         Paths to the datasets. Currently, only parquet format is supported.
     factors: List[Factor]
         A list of Factors to replay on the given set of files.
+    predicate: Optional[Factor] = None
+        Use a predicate to pre-filter the replay result. Any value larger than 0 is treated as True.
     batch_size: int = 40960
         How many rows to replay at one time. Default is 40960 rows.
     n_data_jobs: int = 1

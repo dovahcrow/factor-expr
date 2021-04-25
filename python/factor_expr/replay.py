@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pyarrow.compute as pc
 
 from ._lib import Factor
 from ._lib import replay as _native_replay
@@ -27,12 +28,16 @@ def _replay_single(
     dname: str,
     factors: List[Factor],
     *,
+    predicate: Optional[Factor] = None,
     batch_size: int = 40960,
     trim: bool = False,
     index_col: Optional[str] = None,
     n_factor_jobs: int = 1,
     verbose: bool = False,
 ) -> Tuple[pa.Table, Set[str]]:
+    if predicate is not None:  # put the predicate at the last
+        factors.append(predicate)
+
     replay_result = _native_replay(
         dname, factors, batch_size=batch_size, njobs=n_factor_jobs
     )
@@ -44,18 +49,26 @@ def _replay_single(
         table_datas.append(index)
         table_names.append(index_col)
 
-    for i, (data, schema) in replay_result["succeeded"].items():
-        arr = pa.Array._import_from_c(data, schema)
-        table_datas.append(arr)
-        table_names.append(str(factors[i]))
+    predicate_values = None
+    for i, (data_ptr, schema_ptr) in replay_result["succeeded"].items():
+        arr = pa.Array._import_from_c(data_ptr, schema_ptr)
+
+        if predicate is not None and i == len(factors) - 1:  # is the predicate col
+            predicate_values = arr
+        else:
+            table_datas.append(arr)
+            table_names.append(str(factors[i]))
 
     # Fill in the failed columns
     N = replay_result["nrows"]
     nanarr = pa.array(np.empty(N, "f8"), mask=np.ones(N, "b1"))
 
     for i, reason in replay_result["failed"].items():
-        table_datas.append(nanarr)
-        table_names.append(str(factors[i]))
+        if predicate is not None and i == len(factors) - 1:
+            raise ValueError("predicate failed to compute: {}", reason)
+        else:
+            table_datas.append(nanarr)
+            table_names.append(str(factors[i]))
 
         if verbose:
             print(f"{factors[i]} failed: {reason}", file=stderr)
@@ -65,22 +78,41 @@ def _replay_single(
         names=table_names,
     )
 
+    if predicate is not None:
+        assert (
+            predicate_values is not None
+        ), "predicate_values is none, this is not possible"
+
+        # filter the table using the predicate
+        tb = pc.filter(tb, pc.greater(predicate_values, 0.0))
+        factors.pop()
+
     if index_col is not None:
+        # sort the columns based on the order passed in
         tb = tb.select([index_col] + [str(f) for f in factors])
+
+        # set the metadata for the index col, so that when `.to_pandas` is called,
+        # the index col automatically becomes the index.
         header = tb.slice(0).to_pandas()
         header = header.set_index(index_col)
         _, _, metadata = pa.pandas_compat.dataframe_to_types(header, True)
         tb = tb.replace_schema_metadata(metadata)
-        if trim:
-            tb = tb.slice(
-                np.max([Factor(col).ready_offset() for col in tb.column_names[1:]])
-            )
     else:
+        # sort the columns based on the order passed in
         tb = tb.select([str(f) for f in factors])
-        if trim:
-            tb = tb.slice(
-                np.max([Factor(col).ready_offset() for col in tb.column_names])
+
+    if trim:
+        if index_col is not None:
+            # the first column is the index
+            ready_offset = np.max(
+                [Factor(col).ready_offset() for col in tb.column_names[1:]]
             )
+        else:
+            ready_offset = np.max(
+                [Factor(col).ready_offset() for col in tb.column_names]
+            )
+
+        tb = tb.slice(ready_offset)
 
     return (
         tb,
@@ -92,6 +124,7 @@ async def replay(
     files: Iterable[str],
     factors: List[Factor],
     *,
+    predicate: Optional[Factor] = None,
     batch_size: int = 40960,
     n_data_jobs: int = 1,
     n_factor_jobs: int = 1,
@@ -110,6 +143,8 @@ async def replay(
         Paths to the datasets. Currently only parquet format is supported.
     factors: List[Factor]
         A list of Factors to replay on the given set of files.
+    predicate: Optional[Factor] = None
+        Use a predicate to pre-filter the replay result. Any value larger than 0 is treated as True.
     batch_size: int = 40960
         How many rows to replay at one time. Default is 40960 rows.
     n_data_jobs: int = 1
@@ -156,6 +191,7 @@ async def replay(
                         _replay_single,
                         dname,
                         [f.clone() for f in factors],
+                        predicate=predicate.clone() if predicate is not None else None,
                         batch_size=batch_size,
                         trim=trim,
                         index_col=index_col,
