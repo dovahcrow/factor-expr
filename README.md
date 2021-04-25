@@ -47,8 +47,9 @@ There are three steps to use this library.
 
 ### 1. Prepare the dataset
 
-A dataset is a tabular format with float64 columns and arbitrary column names.
-For example, here is an OHLC candle dataset with 2 rows:
+A dataset is a tabular format with float64 columns and arbitrary column names. 
+Each row in the dataset represents a tick, e.g. for a daily dataset, each row is one day.
+For example, here is an OHLC candle dataset representing 2 ticks:
 
 ```python
 df = pd.DataFrame({
