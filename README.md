@@ -90,7 +90,8 @@ result = await replay(
 )
 ```
 
-The first parameter of `replay` is a list of dataset files and the second parameter is a list of Factors. This gives you the ability to compute multiple factors on multiple datasets. Don't worry about the performance! `Factor Expr` will automatically parallelize over the Factors as well as the datasets.
+The first parameter of `replay` is a list of dataset files and the second parameter is a list of Factors. This gives you the ability to compute multiple factors on multiple datasets.
+Don't worry about the performance! `Factor Expr` allows you parallelize the computation over the factors as well as the datasets by setting `n_factor_jobs` and `n_data_jobs` in the `replay` function.
 
 The returned result is a pandas DataFrame with factors as the column names and `time` as the index. 
 In case of multiple datasets are passed in, the results will be concatenated with the exact order of the datasets. This is useful if you have a scattered dataset. E.g. one file for each year.
