@@ -176,6 +176,6 @@ async def replay(
     factor_table = pa.concat_tables(factor_tables)
 
     if output == "pandas":
-        factor_table = factor_table.to_pandas()
+        factor_table = factor_table.to_pandas(self_destruct=True)
 
     return factor_table
