@@ -1,4 +1,4 @@
-from asyncio import get_event_loop
+from asyncio import get_event_loop, as_completed
 from concurrent.futures import ThreadPoolExecutor
 from sys import stderr
 from typing import Iterable, List, Literal, Optional, Set, Tuple, Union, AsyncGenerator
@@ -123,37 +123,44 @@ async def replay_iter(
     n_factor_jobs: int = 1,
     trim: bool = False,
     index_col: Optional[str] = None,
+    unordered: bool = False,
     verbose: bool = False,
-) -> AsyncGenerator[pa.Table, None]:
+) -> AsyncGenerator[Tuple[str, pa.Table], None]:
     LOOP = get_event_loop()
 
     with ThreadPoolExecutor(max_workers=n_data_jobs) as pool:
         tasks = []
+
         for dname in files:
-            tasks.append(
-                LOOP.run_in_executor(
-                    pool,
-                    partial(
-                        _replay_single,
-                        dname,
-                        [f.clone() for f in factors],
-                        predicate=predicate.clone() if predicate is not None else None,
-                        batch_size=batch_size,
-                        trim=trim,
-                        index_col=index_col,
-                        verbose=verbose,
-                        n_factor_jobs=n_factor_jobs,
-                    ),
-                )
+            fut = LOOP.run_in_executor(
+                pool,
+                partial(
+                    named,
+                    dname,
+                    _replay_single,
+                    dname,
+                    [f.clone() for f in factors],
+                    predicate=predicate.clone() if predicate is not None else None,
+                    batch_size=batch_size,
+                    trim=trim,
+                    index_col=index_col,
+                    verbose=verbose,
+                    n_factor_jobs=n_factor_jobs,
+                ),
             )
 
+            tasks.append(fut)
+
+        if unordered:
+            tasks = as_completed(tasks)
+
         for task in tasks:
-            fvals, failures = await task
+            dname, (fvals, failures) = await task
 
             if verbose:
                 print(len(failures), "failed in total", file=stderr)
 
-            yield fvals
+            yield dname, fvals
 
 
 def _replay_single(
@@ -256,3 +263,7 @@ def _replay_single(
         tb,
         {str(factors[k]) for k in replay_result["failed"].keys()},
     )
+
+
+def named(name, func, *args, **kwargs):
+    return name, func(*args, **kwargs)
