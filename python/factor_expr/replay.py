@@ -86,7 +86,7 @@ async def replay(
     files = list(files)
 
     with tqdm(total=len(files), leave=False, disable=not pbar) as progress:
-        async for fvals in replay_iter(
+        async for _, fvals in replay_iter(
             files,
             factors,
             predicate=predicate,
