@@ -98,6 +98,7 @@ async def replay(
             verbose=verbose,
         ):
             factor_tables.append(fvals)
+            progress.update(1)
 
     if output == "pyarrow":
         factor_table = pa.concat_tables(factor_tables)
