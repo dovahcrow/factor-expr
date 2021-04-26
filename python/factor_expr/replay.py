@@ -132,7 +132,7 @@ async def replay(
     trim: bool = False,
     index_col: Optional[str] = None,
     verbose: bool = False,
-    output: Literal["pandas", "pyarrow"] = "pandas",
+    output: Literal["pandas", "pyarrow", "raw"] = "pandas",
 ) -> Union[pd.DataFrame, pa.Table]:
     """
     Replay a list of factors on a bunch of data.
@@ -160,8 +160,8 @@ async def replay(
         Set the index column.
     verbose: bool = False
         If True, failed factors will be printed out in stderr.
-    output: Literal["pandas" | "pyarrow"] = "pandas"
-        The return format, can be pandas DataFrame ("pandas") or pyarrow Table ("pyarrow").
+    output: Literal["pandas" | "pyarrow" | "raw"] = "pandas"
+        The return format, can be pandas DataFrame ("pandas") or pyarrow Table ("pyarrow") or un-concatenated pyarrow Tables ("raw").
 
     Examples
     --------
@@ -209,9 +209,14 @@ async def replay(
 
             factor_tables.append(fvals)
 
-    factor_table = pa.concat_tables(factor_tables)
-
-    if output == "pandas":
+    if output == "pyarrow":
+        factor_table = pa.concat_tables(factor_tables)
+    elif output == "pandas":
+        factor_table = pa.concat_tables(factor_tables)
         factor_table = factor_table.to_pandas(self_destruct=True)
+    elif output == "raw":
+        factor_table = factor_tables
+    else:
+        raise ValueError(f"Unsupported output type {output}")
 
     return factor_table

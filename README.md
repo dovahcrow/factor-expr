@@ -297,7 +297,7 @@ async def replay(
     trim: bool = False,
     index_col: Optional[str] = None,
     verbose: bool = False,
-    output: Literal["pandas", "pyarrow"] = "pandas",
+    output: Literal["pandas", "pyarrow", "raw"] = "pandas",
 ) -> Union[pd.DataFrame, pa.Table]:
     """
     Replay a list of factors on a bunch of data.
@@ -325,8 +325,8 @@ async def replay(
         Set the index column.
     verbose: bool = False
         If True, failed factors will be printed out in stderr.
-    output: Literal["pandas" | "pyarrow"] = "pandas"
-        The return format, can be pandas DataFrame ("pandas") or pyarrow Table ("pyarrow").
+    output: Literal["pandas" | "pyarrow" | "raw"] = "pandas"
+        The return format, can be pandas DataFrame ("pandas") or pyarrow Table ("pyarrow") or un-concatenated pyarrow Tables ("raw").
     """
 ```
 
