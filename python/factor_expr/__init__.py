@@ -1,4 +1,4 @@
-from .replay import replay
+from .replay import replay, replay_iter
 from ._lib import Factor, __build__
 from importlib.metadata import version, PackageNotFoundError
 

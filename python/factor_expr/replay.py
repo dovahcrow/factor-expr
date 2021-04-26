@@ -1,7 +1,7 @@
 from asyncio import get_event_loop
 from concurrent.futures import ThreadPoolExecutor
 from sys import stderr
-from typing import Iterable, List, Literal, Optional, Set, Tuple, Union
+from typing import Iterable, List, Literal, Optional, Set, Tuple, Union, AsyncGenerator
 from functools import partial
 
 import numpy as np
@@ -22,102 +22,6 @@ try:
         from tqdm import tqdm
 except Exception:
     from tqdm import tqdm
-
-
-def _replay_single(
-    dname: str,
-    factors: List[Factor],
-    *,
-    predicate: Optional[Factor] = None,
-    batch_size: int = 40960,
-    trim: bool = False,
-    index_col: Optional[str] = None,
-    n_factor_jobs: int = 1,
-    verbose: bool = False,
-) -> Tuple[pa.Table, Set[str]]:
-    if predicate is not None:  # put the predicate at the last
-        factors.append(predicate)
-
-    replay_result = _native_replay(
-        dname, factors, batch_size=batch_size, njobs=n_factor_jobs
-    )
-
-    table_datas, table_names = [], []
-
-    if index_col is not None:
-        index = pq.read_table(dname, columns=[index_col]).column(index_col)
-        table_datas.append(index)
-        table_names.append(index_col)
-
-    predicate_values = None
-    for i, (data_ptr, schema_ptr) in replay_result["succeeded"].items():
-        arr = pa.Array._import_from_c(data_ptr, schema_ptr)
-
-        if predicate is not None and i == len(factors) - 1:  # is the predicate col
-            predicate_values = arr
-        else:
-            table_datas.append(arr)
-            table_names.append(str(factors[i]))
-
-    # Fill in the failed columns
-    N = replay_result["nrows"]
-    nanarr = pa.array(np.empty(N, "f8"), mask=np.ones(N, "b1"))
-
-    for i, reason in replay_result["failed"].items():
-        if predicate is not None and i == len(factors) - 1:
-            raise ValueError("predicate failed to compute: {}", reason)
-        else:
-            table_datas.append(nanarr)
-            table_names.append(str(factors[i]))
-
-        if verbose:
-            print(f"{factors[i]} failed: {reason}", file=stderr)
-
-    tb = pa.Table.from_arrays(
-        table_datas,
-        names=table_names,
-    )
-
-    if predicate is not None:
-        assert (
-            predicate_values is not None
-        ), "predicate_values is none, this is not possible"
-
-        # filter the table using the predicate
-        tb = pc.filter(tb, pc.greater(predicate_values, 0.0))
-        factors.pop()
-
-    if index_col is not None:
-        # sort the columns based on the order passed in
-        tb = tb.select([index_col] + [str(f) for f in factors])
-
-        # set the metadata for the index col, so that when `.to_pandas` is called,
-        # the index col automatically becomes the index.
-        header = tb.slice(0).to_pandas()
-        header = header.set_index(index_col)
-        _, _, metadata = pa.pandas_compat.dataframe_to_types(header, True)
-        tb = tb.replace_schema_metadata(metadata)
-    else:
-        # sort the columns based on the order passed in
-        tb = tb.select([str(f) for f in factors])
-
-    if trim:
-        if index_col is not None:
-            # the first column is the index
-            ready_offset = np.max(
-                [Factor(col).ready_offset() for col in tb.column_names[1:]]
-            )
-        else:
-            ready_offset = np.max(
-                [Factor(col).ready_offset() for col in tb.column_names]
-            )
-
-        tb = tb.slice(ready_offset)
-
-    return (
-        tb,
-        {str(factors[k]) for k in replay_result["failed"].keys()},
-    )
 
 
 async def replay(
@@ -178,11 +82,52 @@ async def replay(
         )
     ```
     """
-    LOOP = get_event_loop()
     factor_tables: List[pa.Table] = []
+    files = list(files)
 
-    tasks = []
+    with tqdm(total=len(files), leave=False, disable=not pbar) as progress:
+        async for fvals in replay_iter(
+            files,
+            factors,
+            predicate=predicate,
+            batch_size=batch_size,
+            n_data_jobs=n_data_jobs,
+            n_factor_jobs=n_factor_jobs,
+            trim=trim,
+            index_col=index_col,
+            verbose=verbose,
+        ):
+            factor_tables.append(fvals)
+
+    if output == "pyarrow":
+        factor_table = pa.concat_tables(factor_tables)
+    elif output == "pandas":
+        factor_table = pa.concat_tables(factor_tables)
+        factor_table = factor_table.to_pandas(self_destruct=True)
+    elif output == "raw":
+        factor_table = factor_tables
+    else:
+        raise ValueError(f"Unsupported output type {output}")
+
+    return factor_table
+
+
+async def replay_iter(
+    files: Iterable[str],
+    factors: List[Factor],
+    *,
+    predicate: Optional[Factor] = None,
+    batch_size: int = 40960,
+    n_data_jobs: int = 1,
+    n_factor_jobs: int = 1,
+    trim: bool = False,
+    index_col: Optional[str] = None,
+    verbose: bool = False,
+) -> AsyncGenerator[pa.Table, None]:
+    LOOP = get_event_loop()
+
     with ThreadPoolExecutor(max_workers=n_data_jobs) as pool:
+        tasks = []
         for dname in files:
             tasks.append(
                 LOOP.run_in_executor(
@@ -201,22 +146,112 @@ async def replay(
                 )
             )
 
-        for task in tqdm(tasks, leave=False, disable=not pbar):
+        for task in tasks:
             fvals, failures = await task
 
             if verbose:
                 print(len(failures), "failed in total", file=stderr)
 
-            factor_tables.append(fvals)
+            yield fvals
 
-    if output == "pyarrow":
-        factor_table = pa.concat_tables(factor_tables)
-    elif output == "pandas":
-        factor_table = pa.concat_tables(factor_tables)
-        factor_table = factor_table.to_pandas(self_destruct=True)
-    elif output == "raw":
-        factor_table = factor_tables
+
+def _replay_single(
+    dname: str,
+    factors: List[Factor],
+    *,
+    predicate: Optional[Factor] = None,
+    batch_size: int = 40960,
+    trim: bool = False,
+    index_col: Optional[str] = None,
+    n_factor_jobs: int = 1,
+    verbose: bool = False,
+) -> Tuple[pa.Table, Set[str]]:
+    if predicate is not None:
+        # put the predicate as the last
+        replay_result = _native_replay(
+            dname, [*factors, predicate], batch_size=batch_size, njobs=n_factor_jobs
+        )
     else:
-        raise ValueError(f"Unsupported output type {output}")
+        replay_result = _native_replay(
+            dname, factors, batch_size=batch_size, njobs=n_factor_jobs
+        )
 
-    return factor_table
+    table_datas, table_names = [], []
+
+    if index_col is not None:
+        index = pq.read_table(dname, columns=[index_col]).column(index_col)
+        table_datas.append(index)
+        table_names.append(index_col)
+
+    predicate_values = None
+    for i, (data_ptr, schema_ptr) in replay_result["succeeded"].items():
+        arr = pa.Array._import_from_c(data_ptr, schema_ptr)
+
+        if predicate is not None and i == len(factors):  # is the predicate col
+            predicate_values = arr
+        else:
+            table_datas.append(arr)
+            table_names.append(str(factors[i]))
+
+    # Fill in the failed columns
+    N = replay_result["nrows"]
+    nanarr = pa.array(np.empty(N, "f8"), mask=np.ones(N, "b1"))
+
+    for i, reason in replay_result["failed"].items():
+        if predicate is not None and i == len(factors):
+            raise ValueError("predicate failed to compute: {}", reason)
+        else:
+            table_datas.append(nanarr)
+            table_names.append(str(factors[i]))
+
+        if verbose:
+            print(f"{factors[i]} failed: {reason}", file=stderr)
+
+    tb = pa.Table.from_arrays(
+        table_datas,
+        names=table_names,
+    )
+
+    if trim:
+        if index_col is not None:
+            # the first column is the index
+            data_starts = 1
+        else:
+            data_starts = 0
+
+        ready_offset = np.max(
+            [Factor(col).ready_offset() for col in tb.column_names[data_starts:]]
+        )
+
+        tb = tb.slice(ready_offset)
+
+        # trim predicate as well
+        if predicate_values is not None:
+            predicate_values = predicate_values.slice(ready_offset)
+
+    if predicate is not None:
+        assert (
+            predicate_values is not None
+        ), "predicate_values is none, this is not possible"
+
+        # filter the table using the predicate
+        tb = pc.filter(tb, pc.greater(predicate_values, 0.0))
+
+    if index_col is not None:
+        # sort the columns based on the order passed in
+        tb = tb.select([index_col] + [str(f) for f in factors])
+
+        # set the metadata for the index col, so that when `.to_pandas` is called,
+        # the index col automatically becomes the index.
+        header = tb.slice(0).to_pandas()
+        header = header.set_index(index_col)
+        _, _, metadata = pa.pandas_compat.dataframe_to_types(header, True)
+        tb = tb.replace_schema_metadata(metadata)
+    else:
+        # sort the columns based on the order passed in
+        tb = tb.select([str(f) for f in factors])
+
+    return (
+        tb,
+        {str(factors[k]) for k in replay_result["failed"].keys()},
+    )

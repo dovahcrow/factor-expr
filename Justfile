@@ -14,6 +14,9 @@ build-wheel: build-extension
   cd python && poetry run python ../scripts/python-helper.py rename-wheel
   rm python/README.md
 
+clear-python-dist:
+  rm -r python/dist
+  
 test +ARGS="": build-extension
   cd python && poetry run pytest factor_expr/tests {{ARGS}}
 
