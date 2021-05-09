@@ -131,7 +131,11 @@ consider asking on [Discussions](https://github.com/dovahcrow/factor-expr/discus
 * Natural Logarithm after Absolute: `(LogAbs <expr>)`
 * Sign: `(Sign <expr>)`
 * Abs: `(Abs <expr>)`
+
 ### Logics
+
+Any `<expr>` larger than 0 are treated as `true`.
+
 * If: `(If <expr> <expr> <expr>)` - if the first `<expr>` is larger than 0, return the second `<expr>` otherwise return the third `<expr>`
 * And: `(And <expr> <expr>)`
 * Or: `(Or <expr> <expr>)`
