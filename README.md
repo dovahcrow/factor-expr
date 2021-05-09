@@ -76,7 +76,7 @@ from factor_expr import Factor
 Factor("(TSLogReturn 30 :close)")
 ```
 
-Note, in `Factor Expr`, column names are referred to by using `:column-name`.
+Note, in `Factor Expr`, column names are referred by the `:column-name` syntax.
 
 ### 3. Compute the factors on the prepared dataset
 
