@@ -8,9 +8,9 @@
 <table>
 <tr>
 <th>Factor Expression</th>
-<th>+</th>
+<th></th>
 <th>Historical Data</th>
-<th>=</th>
+<th></th>
 <th>Factor Values</th>
 </tr>
 <tr>
