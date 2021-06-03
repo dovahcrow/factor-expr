@@ -126,6 +126,7 @@ fn visit<T: TickerBatch>(sexpr: Cons) -> BoxOp<T> {
         TSSkew::<T>::NAME => Result::<TSSkew<T>>::from_iter(params)?.boxed(),
         Delay::<T>::NAME => Result::<Delay<T>>::from_iter(params)?.boxed(),
         TSRank::<T>::NAME => Result::<TSRank<T>>::from_iter(params)?.boxed(),
+        TSQuantile::<T>::NAME => Result::<TSQuantile<T>>::from_iter(params)?.boxed(),
         TSLogReturn::<T>::NAME => Result::<TSLogReturn<T>>::from_iter(params)?.boxed(),
         _ => throw!(anyhow!("Unknown function '{}'", func)),
     }

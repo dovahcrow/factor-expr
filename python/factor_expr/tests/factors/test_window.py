@@ -203,3 +203,19 @@ def test_logreturn():
         ),
         result.values.ravel(),
     ).all()
+
+
+def test_quantile():
+    df = pd.read_parquet(FILENAME)
+
+    f = Factor("(TSQuantile 30 0.3 :price_bid_l1_open)")
+    result = asyncio.run(
+        replay([FILENAME], [f], trim=True, pbar=False, index_col="time")
+    )
+
+    assert np.isclose(
+        df.price_bid_l1_open.rolling(30)
+        .quantile(0.3, "lower")
+        .values[f.ready_offset() :],
+        result.values.ravel(),
+    ).all()
