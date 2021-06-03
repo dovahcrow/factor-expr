@@ -1,7 +1,9 @@
 use super::super::{parser::Parameter, BoxOp, Named, Operator};
+use crate::float::{Ascending, Float, IntoFloat};
 use crate::ticker_batch::TickerBatch;
 use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
+use order_stats_tree::OSTree;
 use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::iter::FromIterator;
@@ -10,14 +12,14 @@ use std::mem;
 #[derive(Clone)]
 struct Cache {
     history: VecDeque<f64>,
-    sorted: Vec<f64>, // sorted window
+    ostree: OSTree<Float<Ascending>>, // sorted window
 }
 
 impl Cache {
     pub fn new() -> Cache {
         Cache {
             history: VecDeque::new(),
-            sorted: Vec::new(),
+            ostree: OSTree::new(),
         }
     }
 }
@@ -67,17 +69,10 @@ impl<T: TickerBatch> Operator<T> for TSRank<T> {
 
         while i + self.warmup < self.ready_offset() && i < ss.len() {
             // maintain
-            self.cache.history.push_back(ss[i]);
+            let val = ss[i];
 
-            let idx = match self
-                .cache
-                .sorted
-                .binary_search_by(|e| e.partial_cmp(&ss[i]).unwrap())
-            {
-                Ok(i) => i,
-                Err(i) => i,
-            };
-            self.cache.sorted.insert(idx, ss[i]);
+            self.cache.history.push_back(val);
+            self.cache.ostree.increase(val.asc(), 1);
 
             results.push(f64::NAN);
             i += 1;
@@ -89,43 +84,15 @@ impl<T: TickerBatch> Operator<T> for TSRank<T> {
 
             // maintain
             self.cache.history.push_back(val);
-
-            let idx = match self
-                .cache
-                .sorted
-                .binary_search_by(|e| e.partial_cmp(&val).unwrap())
-            {
-                Ok(i) => i,
-                Err(i) => i,
-            };
-            self.cache.sorted.insert(idx, val);
+            self.cache.ostree.increase(val.asc(), 1);
 
             // compute
-            let mut idx = self
-                .cache
-                .sorted
-                .binary_search_by(|e| e.partial_cmp(self.cache.history.back().unwrap()).unwrap())
-                .unwrap();
-
-            while idx != 0 {
-                if self.cache.sorted[idx] == self.cache.sorted[idx - 1] {
-                    idx -= 1;
-                } else {
-                    break;
-                }
-            }
-
+            let idx = self.cache.ostree.rank(&val.asc()).unwrap();
             results.push(self.fchecked(idx as f64)?);
 
             // maintain
-            let to_remove = self.cache.history.pop_front().unwrap();
-            let idx = self
-                .cache
-                .sorted
-                .binary_search_by(|e| e.partial_cmp(&to_remove).unwrap())
-                .unwrap();
-
-            self.cache.sorted.remove(idx);
+            let to_remove = self.cache.history.pop_front().unwrap().asc();
+            self.cache.ostree.decrease(&to_remove, 1);
         }
 
         results.into()

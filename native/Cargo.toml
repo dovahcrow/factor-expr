@@ -21,6 +21,7 @@ ndarray = "0.14"
 num = "0.3"
 num-traits = "0.2"
 numpy = "0.13"
+order-stats-tree = {git = "https://github.com/dovahcrow/order-stats-tree"}
 parquet = "3"
 pyo3 = {version = "0.13", features = ["extension-module"]}
 pyo3-built = "0.4"

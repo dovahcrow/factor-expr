@@ -1,3 +1,4 @@
+mod float;
 mod ops;
 pub(crate) mod python;
 mod replay;
