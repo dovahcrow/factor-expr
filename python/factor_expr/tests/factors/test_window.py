@@ -219,3 +219,17 @@ def test_quantile():
         .values[f.ready_offset() :],
         result.values.ravel(),
     ).all()
+
+
+def test_median():
+    df = pd.read_parquet(FILENAME)
+
+    f = Factor("(TSQuantile 37 0.5 :price_bid_l1_open)")
+    result = asyncio.run(
+        replay([FILENAME], [f], trim=True, pbar=False, index_col="time")
+    )
+
+    assert np.isclose(
+        df.price_bid_l1_open.rolling(37).median().values[f.ready_offset() :],
+        result.values.ravel(),
+    ).all()
