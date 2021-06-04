@@ -162,7 +162,8 @@ All the window functions take a window size as the first argument. The computati
 * The value `<const>` ticks back: `(Delay <const> <expr>)`
 * The log return of the value `<const>` ticks back to current value: `(TSLogReturn <const> <expr>)`
 * Rolling correlation between two series: `(TSCorrelation <const> <expr> <expr>)`
-* Rolling quantile between of a series: `(TSQuantile <const> <const> <expr>)`, e.g. `(TSQuantile 100 0.5 <expr>)` computes the median of a window sized 100.
+* Rolling quantile of a series: `(TSQuantile <const> <const> <expr>)`, e.g. `(TSQuantile 100 0.5 <expr>)` computes the median of a window sized 100.
+
 #### Warm-up Period for Window Functions
 
 Factors containing window functions require a warm-up period. For example, for
