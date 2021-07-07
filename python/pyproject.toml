@@ -21,7 +21,7 @@ version = "0.2.2"
 [tool.poetry.dependencies]
 numpy = "^1"
 pandas = "^1"
-pyarrow = "^3"
+pyarrow = "^4"
 python = "^3.8"
 tqdm = "^4"
 
