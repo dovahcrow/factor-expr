@@ -69,7 +69,8 @@ impl<T: TickerBatch> Operator<T> for TSCorrelation<T> {
         let mut results = Vec::with_capacity(xs.len());
 
         let mut i = 0;
-        while i + self.warmup < max(self.sx.ready_offset(), self.sy.ready_offset()) {
+        while i + self.warmup < max(self.sx.ready_offset(), self.sy.ready_offset()) && i < xs.len()
+        {
             results.push(f64::NAN);
             i += 1;
         }
