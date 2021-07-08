@@ -16,7 +16,7 @@ keywords = ["factor", "expression", "alpha", "S-expression", "quantative trading
 license = "MIT"
 name = "factor_expr"
 readme = "README.md"
-version = "0.2.2"
+version = "0.2.3"
 
 [tool.poetry.dependencies]
 numpy = "^1"
