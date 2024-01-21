@@ -1,20 +1,26 @@
 use super::ops::{from_str, Operator};
 use anyhow::Result;
-use arrow::{array::Array, record_batch::RecordBatch};
+use arrow::array::{make_array, Array};
+use arrow::datatypes::{DataType, Field, Schema};
+use arrow::ffi::{self, FFI_ArrowArray, FFI_ArrowSchema};
+use arrow::record_batch::RecordBatch;
 use dict_derive::IntoPyObject;
 use fehler::throw;
+use pyo3::class::basic::CompareOp;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::{class::basic::CompareOp, PyObjectProtocol, PySequenceProtocol};
+use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
+// *mut FFI_ArrowArray, *mut FFI_ArrowSchema
 type ArrowFFIPtr = (usize, usize);
 
 #[derive(IntoPyObject)]
 pub struct ReplayResult {
-    nrows: usize,
     succeeded: HashMap<usize, ArrowFFIPtr>,
     failed: HashMap<usize, String>,
 }
@@ -68,15 +74,12 @@ impl Factor {
             op: self.op.clone(),
         }
     }
-}
 
-#[pyproto]
-impl PySequenceProtocol for Factor {
-    fn __len__(&'p self) -> usize {
+    fn __len__(&self) -> usize {
         self.op.len()
     }
 
-    fn __getitem__(&'p self, idx: isize) -> PyResult<Factor> {
+    fn __getitem__(&self, idx: isize) -> PyResult<Factor> {
         if idx < 0 {
             throw!(PyValueError::new_err(format!("idx {} less than 0", idx)))
         }
@@ -88,10 +91,7 @@ impl PySequenceProtocol for Factor {
                 .ok_or_else(|| PyValueError::new_err(format!("idx {} overflows", idx)))?,
         })
     }
-}
 
-#[pyproto]
-impl PyObjectProtocol for Factor {
     fn __str__(&self) -> PyResult<String> {
         Ok(self.op.to_string())
     }
@@ -124,9 +124,9 @@ impl PyObjectProtocol for Factor {
 #[pyfunction]
 pub fn replay<'py>(
     py: Python<'py>,
-    file: &str,
+    schema: Vec<usize>,
+    array: Vec<usize>,
     mut ops: Vec<Py<Factor>>,
-    batch_size: Option<usize>,
     njobs: usize,
 ) -> PyResult<ReplayResult> {
     let mut ops: Vec<_> = ops.iter_mut().map(|f| f.borrow_mut(py)).collect();
@@ -135,20 +135,49 @@ pub fn replay<'py>(
         .map(|f| (&mut *f.op) as &mut dyn Operator<RecordBatch>)
         .collect();
 
-    let (nrows, succeeded, failed) = py
+    let mut ffi_schemas = vec![];
+    let mut fields = vec![];
+    for schema in schema {
+        let schema = unsafe { FFI_ArrowSchema::from_raw(schema as *mut _) };
+        let dt = DataType::try_from(&schema)
+            .map_err(|_| PyValueError::new_err("Cannot get data type"))?;
+        let field = Field::new(schema.name(), dt, schema.nullable());
+        fields.push(field);
+        ffi_schemas.push(schema);
+    }
+    let schema = Arc::new(Schema::new(fields));
+
+    let mut rbs = vec![];
+    for rb in array.chunks_exact(schema.fields().len()) {
+        let mut columns = vec![];
+
+        for (&array, ffi_schema) in rb.into_iter().zip(&ffi_schemas) {
+            let array = unsafe { FFI_ArrowArray::from_raw(array as *mut _) };
+            let data = unsafe { ffi::from_ffi(array, ffi_schema).unwrap() };
+
+            columns.push(make_array(data));
+        }
+        let rb = RecordBatch::try_new(schema.clone(), columns).unwrap();
+        rbs.push(rb);
+    }
+
+    let (succeeded, failed) = py
         .allow_threads(|| -> Result<_> {
             let pool = rayon::ThreadPoolBuilder::new().num_threads(njobs).build()?;
-            Ok(pool.install(|| super::replay::replay(file, ops, batch_size))?)
+            Ok(pool.install(|| crate::replay::replay(rbs.iter().map(Cow::Borrowed), ops, None))?)
         })
         .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
 
     Ok(ReplayResult {
-        nrows,
         succeeded: succeeded
             .into_iter()
             .map(|(k, v)| {
-                let (p1, p2) = v.to_raw().unwrap();
-                (k, (p1 as usize, p2 as usize))
+                let data = v.into_data();
+                let (array, schema) = ffi::to_ffi(&data).unwrap();
+                let array = Box::into_raw(Box::new(array));
+                let schema = Box::into_raw(Box::new(schema));
+
+                (k, (array as usize, schema as usize))
             })
             .collect(),
         failed: failed

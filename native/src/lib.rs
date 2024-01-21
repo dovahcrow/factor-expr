@@ -1,7 +1,7 @@
 mod float;
 mod ops;
 pub(crate) mod python;
-mod replay;
+pub mod replay;
 mod ticker_batch;
 
 pub use self::python::*;
@@ -15,9 +15,12 @@ mod build {
 
 #[pymodule]
 fn _lib(py: Python, m: &PyModule) -> PyResult<()> {
-    m.add("__build__", pyo3_built!(py, build))?;
+    m.add(
+        "__build__",
+        pyo3_built!(py, build, "build", "time", "features", "host", "target"),
+    )?;
     m.add_class::<Factor>()?;
-    m.add_function(wrap_pyfunction!(replay, m)?)?;
+    m.add_function(wrap_pyfunction!(python::replay, m)?)?;
 
     Ok(())
 }

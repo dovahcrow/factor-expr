@@ -10,28 +10,29 @@ name = "factor_expr"
 
 [dependencies]
 anyhow = "1"
-arrow = "4"
+arrow = { version = "50", features = [ "ffi" ] }
 chrono = "0.4"
-dict_derive = "0.3"
+dict_derive = "0.5"
 dyn-clone = "1"
 fehler = "1"
-itertools = "0.10"
+itertools = "0.12"
 lexpr = "0.2"
 ndarray = "0.15"
 num = "0.4"
 num-traits = "0.2"
-numpy = "0.13"
+numpy = "0.20"
 order-stats-tree = {git = "https://github.com/dovahcrow/order-stats-tree"}
-parquet = "4"
-pyo3 = {version = "0.13", default-features = false, features = ["macros"]}
+parquet = "50"
+pyo3 = {version = "0.20", default-features = false, features = ["macros"]}
 pyo3-built = "0.4"
 rayon = "1"
 thiserror = "1"
+polars = "0.36"
 
 [dev-dependencies]
 
 [build-dependencies]
-built = {version = "0.5", features = ["chrono"]}
+built = {version = "0.7", features = ["chrono"]}
 
 [features]
 default = ["extension"]

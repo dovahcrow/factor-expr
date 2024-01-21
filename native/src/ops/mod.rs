@@ -2,12 +2,14 @@ mod arithmetic;
 mod constant;
 mod getter;
 mod logic;
+mod overlap_studies;
 mod parser;
 mod window;
 
 pub use arithmetic::*;
 pub use getter::*;
 pub use logic::*;
+pub use overlap_studies::*;
 pub use parser::from_str;
 pub use window::*;
 
@@ -29,7 +31,7 @@ where
 {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]>;
-    fn ready_offset(&self) -> usize;
+    fn ready_offset(&self) -> usize; // A.K.A. at offset the output of factor is first time not nan
     fn to_string(&self) -> String;
 
     fn len(&self) -> usize;

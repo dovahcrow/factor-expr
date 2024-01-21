@@ -1,42 +1,47 @@
-use super::super::{parser::Parameter, BoxOp, Named, Operator};
-use crate::ticker_batch::TickerBatch;
+use std::collections::VecDeque;
+use std::mem;
+use std::{borrow::Cow, iter::FromIterator};
+
 use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
-use std::borrow::Cow;
-use std::collections::VecDeque;
-use std::iter::FromIterator;
-use std::mem;
 
-pub struct Delay<T> {
-    win_size: usize,
+use crate::ticker_batch::TickerBatch;
+
+use super::{parser::Parameter, BoxOp, Named, Operator};
+
+pub struct SMA<T> {
     inner: BoxOp<T>,
+    win_size: usize,
 
-    window: VecDeque<f64>,
     i: usize,
+    window: VecDeque<f64>,
+    sum: f64,
 }
 
-impl<T> Clone for Delay<T> {
+impl<T> Clone for SMA<T> {
     fn clone(&self) -> Self {
-        Self::new(self.win_size, self.inner.clone())
+        Self::new(self.inner.clone(), self.win_size)
     }
 }
 
-impl<T> Delay<T> {
-    pub fn new(win_size: usize, s: BoxOp<T>) -> Self {
+impl<T> SMA<T> {
+    pub fn new(inner: BoxOp<T>, n: usize) -> Self {
         Self {
-            win_size,
-            inner: s,
-            window: VecDeque::with_capacity(win_size + 1),
+            window: VecDeque::with_capacity(n),
+            sum: 0.,
             i: 0,
+
+            inner,
+            win_size: n,
         }
     }
 }
 
-impl<T> Named for Delay<T> {
-    const NAME: &'static str = "Delay";
+impl<T> Named for SMA<T> {
+    const NAME: &'static str = "SMA";
 }
 
-impl<T: TickerBatch> Operator<T> for Delay<T> {
+impl<T: TickerBatch> Operator<T> for SMA<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;
@@ -52,10 +57,11 @@ impl<T: TickerBatch> Operator<T> for Delay<T> {
             }
 
             self.window.push_back(val);
-
-            let val = if self.window.len() == self.win_size + 1 {
-                let result = self.window.pop_front().unwrap();
-                self.fchecked(result)?
+            self.sum += val;
+            let val = if self.window.len() == self.win_size {
+                let val = self.sum / self.win_size as f64;
+                self.sum -= self.window.pop_front().unwrap();
+                val
             } else {
                 f64::NAN
             };
@@ -66,14 +72,14 @@ impl<T: TickerBatch> Operator<T> for Delay<T> {
     }
 
     fn ready_offset(&self) -> usize {
-        self.inner.ready_offset() + self.win_size
+        self.inner.ready_offset() + self.win_size - 1
     }
 
     fn to_string(&self) -> String {
         format!(
             "({} {} {})",
             Self::NAME,
-            self.win_size,
+            self.win_size.to_string(),
             self.inner.to_string()
         )
     }
@@ -99,7 +105,6 @@ impl<T: TickerBatch> Operator<T> for Delay<T> {
         if i == 0 {
             return self.clone().boxed();
         }
-        let i = i - 1;
 
         let ns = self.inner.len();
 
@@ -118,7 +123,6 @@ impl<T: TickerBatch> Operator<T> for Delay<T> {
         let i = i - 1;
 
         let ns = self.inner.len();
-
         if i < ns {
             if i == 0 {
                 return mem::replace(&mut self.inner, op) as BoxOp<T>;
@@ -130,27 +134,25 @@ impl<T: TickerBatch> Operator<T> for Delay<T> {
     }
 }
 
-impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<Delay<T>> {
+impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<SMA<T>> {
     #[throws(Error)]
-    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> Delay<T> {
-        let mut params: Vec<_> = iter.into_iter().collect();
-        if params.len() != 2 {
-            throw!(anyhow!(
-                "{} expect a constant and a series, got {:?}",
-                Delay::<T>::NAME,
-                params
-            ))
+    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> SMA<T> {
+        let mut iter = iter.into_iter();
+
+        let Parameter::Constant(n) = iter.next().unwrap() else {
+            throw!(anyhow!("<n> for SMA should be an constant"));
+        };
+
+        let inner = iter
+            .next()
+            .unwrap()
+            .to_operator()
+            .ok_or_else(|| anyhow!("<inner> for SMA should be an operator"))?;
+
+        if iter.count() != 0 {
+            throw!(anyhow!("Too many parameters for SMA"))
         }
-        let k1 = params.remove(0);
-        let k2 = params.remove(0);
-        match (k1, k2) {
-            (Parameter::Constant(c), Parameter::Operator(s)) => Delay::new(c as usize, s),
-            (a, b) => throw!(anyhow!(
-                "{name} expect a constant and a series, got ({name} {} {})",
-                a,
-                b,
-                name = Delay::<T>::NAME,
-            )),
-        }
+
+        SMA::new(inner, n as usize)
     }
 }

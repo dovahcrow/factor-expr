@@ -12,7 +12,7 @@ pub struct If<T> {
     cond: BoxOp<T>,
     btrue: BoxOp<T>,
     bfalse: BoxOp<T>,
-    warmup: usize,
+    i: usize,
 }
 
 impl<T> Clone for If<T> {
@@ -27,7 +27,7 @@ impl<T> If<T> {
             cond,
             btrue,
             bfalse,
-            warmup: 0,
+            i: 0,
         }
     }
 }
@@ -39,26 +39,31 @@ impl<T> Named for If<T> {
 impl<T: TickerBatch> Operator<T> for If<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
-        let conds = &*&*self.cond.update(tb)?;
-        let btrues = &*&*self.btrue.update(tb)?;
-        let bfalses = &*&*self.bfalse.update(tb)?;
+        let cond = &mut self.cond;
+        let btrue = &mut self.btrue;
+        let bfalse = &mut self.bfalse;
 
-        let mut results = Vec::with_capacity(conds.len());
+        let (conds, (btrues, bfalses)) = rayon::join(
+            || cond.update(tb),
+            || rayon::join(|| btrue.update(tb), || bfalse.update(tb)),
+        );
 
-        let mut i = 0;
-        while i + self.warmup < self.ready_offset() && i < conds.len() {
-            results.push(f64::NAN);
-            i += 1;
-        }
-        self.warmup += i;
+        let (conds, btrues, bfalses) = (&*conds?, &*btrues?, &*bfalses?);
+        assert_eq!(tb.len(), conds.len());
+        assert_eq!(tb.len(), btrues.len());
+        assert_eq!(tb.len(), bfalses.len());
 
-        // No need to do fchecked since we just forward the value
-        for i in i..conds.len() {
-            if conds[i] > 0. {
-                results.push(btrues[i]);
-            } else {
-                results.push(bfalses[i]);
+        let mut results = Vec::with_capacity(tb.len());
+
+        for ((&cond, &tval), &fval) in conds.into_iter().zip(btrues).zip(bfalses) {
+            if self.i < self.ready_offset() {
+                results.push(f64::NAN);
+                self.i += 1;
+                continue;
             }
+
+            let val = if cond > 0. { tval } else { fval };
+            results.push(val);
         }
 
         results.into()
@@ -196,7 +201,7 @@ macro_rules! impl_logic_bivariate {
             pub struct $op<T> {
                 l: BoxOp<T>,
                 r: BoxOp<T>,
-                warmup: usize,
+                i: usize,
             }
 
             impl<T> Clone for $op<T> {
@@ -207,7 +212,7 @@ macro_rules! impl_logic_bivariate {
 
             impl<T> $op<T> {
                 pub fn new(l: BoxOp<T>, r: BoxOp<T>) -> Self {
-                    Self { l, r, warmup: 0 }
+                    Self { l, r, i: 0 }
                 }
             }
 
@@ -219,21 +224,23 @@ macro_rules! impl_logic_bivariate {
             {
                 #[throws(Error)]
                 fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
-                    let ls = &*self.l.update(tb)?;
-                    let rs = &*self.r.update(tb)?;
+                    let (l, r) = (&mut self.l, &mut self.r);
+                    let (ls, rs) = rayon::join(|| l.update(tb), || r.update(tb));
+                    let (ls, rs) = (&*ls?, &*rs?);
+                    assert_eq!(tb.len(), ls.len());
+                    assert_eq!(tb.len(), rs.len());
 
-                    let mut results = Vec::with_capacity(ls.len());
+                    let mut results = Vec::with_capacity(tb.len());
 
-                    let mut i = 0;
-                    while i + self.warmup < self.ready_offset() && i < ls.len() {
-                        results.push(f64::NAN);
-                        i += 1;
-                    }
-                    self.warmup += i;
+                    for (&lval, &rval) in ls.into_iter().zip(rs) {
+                        if self.i < self.l.ready_offset() || self.i < self.r.ready_offset() {
+                            results.push(f64::NAN);
+                            self.i += 1;
+                            continue;
+                        }
 
-                    for i in i..ls.len() {
-                        let val = ($($func)+) (ls[i], rs[i]) as u64 as f64;
-                        results.push(self.fchecked(val)?);
+                        let val = ($($func)+) (lval, rval) as u64 as f64;
+                        results.push(val);
                     }
 
                     results.into()
@@ -350,19 +357,19 @@ impl_logic_bivariate! (
 );
 
 pub struct Not<T> {
-    s: BoxOp<T>,
-    warmup: usize,
+    inner: BoxOp<T>,
+    i: usize,
 }
 
 impl<T> Clone for Not<T> {
     fn clone(&self) -> Self {
-        Self::new(self.s.clone())
+        Self::new(self.inner.clone())
     }
 }
 
 impl<T> Not<T> {
     pub fn new(s: BoxOp<T>) -> Self {
-        Self { s, warmup: 0 }
+        Self { inner: s, i: 0 }
     }
 }
 
@@ -373,20 +380,19 @@ impl<T> Named for Not<T> {
 impl<T: TickerBatch> Operator<T> for Not<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
-        let ss = &*self.s.update(tb)?;
+        let vals = &*self.inner.update(tb)?;
+        assert_eq!(tb.len(), vals.len());
 
-        let mut results = Vec::with_capacity(ss.len());
+        let mut results = Vec::with_capacity(tb.len());
 
-        let mut i = 0;
-        while i + self.warmup < self.ready_offset() && i < ss.len() {
-            results.push(f64::NAN);
-            i += 1;
-        }
-        self.warmup += i;
+        for &val in vals {
+            if self.i < self.inner.ready_offset() {
+                results.push(f64::NAN);
+                self.i += 1;
+                continue;
+            }
 
-        // No need to do fchecked since we just forward the value
-        for i in i..ss.len() {
-            let val = if ss[i] > 0. { 0. } else { 1. };
+            let val = if val > 0. { 0. } else { 1. };
             results.push(val);
         }
 
@@ -398,15 +404,15 @@ impl<T: TickerBatch> Operator<T> for Not<T> {
     }
 
     fn to_string(&self) -> String {
-        format!("({} {})", Self::NAME, self.s.to_string())
+        format!("({} {})", Self::NAME, self.inner.to_string())
     }
 
     fn depth(&self) -> usize {
-        1 + self.s.depth()
+        1 + self.inner.depth()
     }
 
     fn len(&self) -> usize {
-        self.s.len() + 1
+        self.inner.len() + 1
     }
 
     fn child_indices(&self) -> Vec<usize> {
@@ -414,7 +420,7 @@ impl<T: TickerBatch> Operator<T> for Not<T> {
     }
 
     fn columns(&self) -> Vec<String> {
-        self.s.columns()
+        self.inner.columns()
     }
 
     #[throws(as Option)]
@@ -424,10 +430,10 @@ impl<T: TickerBatch> Operator<T> for Not<T> {
         }
         let i = i - 1;
 
-        let ns = self.s.len();
+        let ns = self.inner.len();
 
         if i < ns {
-            self.s.get(i)?
+            self.inner.get(i)?
         } else {
             throw!()
         }
@@ -440,13 +446,13 @@ impl<T: TickerBatch> Operator<T> for Not<T> {
         }
         let i = i - 1;
 
-        let ns = self.s.len();
+        let ns = self.inner.len();
 
         if i < ns {
             if i == 0 {
-                return mem::replace(&mut self.s, op) as BoxOp<T>;
+                return mem::replace(&mut self.inner, op) as BoxOp<T>;
             }
-            self.s.insert(i, op)?
+            self.inner.insert(i, op)?
         } else {
             throw!()
         }

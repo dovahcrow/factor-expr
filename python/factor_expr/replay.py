@@ -1,7 +1,8 @@
+from pyarrow.cffi import ffi
 from asyncio import get_event_loop, as_completed
 from concurrent.futures import ThreadPoolExecutor
 from sys import stderr
-from typing import Iterable, List, Literal, Optional, Set, Tuple, Union, AsyncGenerator
+from typing import Iterable, List, Literal, Optional, Set, Tuple, Union, AsyncGenerator, cast
 from functools import partial
 
 import numpy as np
@@ -25,7 +26,7 @@ except Exception:
 
 
 async def replay(
-    files: Iterable[str],
+    files: Iterable[str | pa.Table],
     factors: List[Factor],
     *,
     predicate: Optional[Factor] = None,
@@ -37,7 +38,7 @@ async def replay(
     index_col: Optional[str] = None,
     verbose: bool = False,
     output: Literal["pandas", "pyarrow", "raw"] = "pandas",
-) -> Union[pd.DataFrame, pa.Table]:
+) -> pd.DataFrame | pa.Table:
     """
     Replay a list of factors on a bunch of data.
 
@@ -114,7 +115,7 @@ async def replay(
 
 
 async def replay_iter(
-    files: Iterable[str],
+    files: Iterable[str | pa.Table],
     factors: List[Factor],
     *,
     predicate: Optional[Factor] = None,
@@ -163,8 +164,39 @@ async def replay_iter(
             yield dname, fvals
 
 
+def table_to_pointers(tb: pa.Table):
+    batches = tb.to_batches()
+
+    schema = []
+    arrays = []
+    keepalive = []
+    for i, batch in enumerate(batches):
+        for array, name in zip(batch.columns, batch.column_names):
+            c_array = ffi.new("struct ArrowArray*")
+            ptr_array = int(ffi.cast("uintptr_t", c_array))
+            if i == 0:
+                c_schema = ffi.new("struct ArrowSchema*")
+                ptr_schema = int(ffi.cast("uintptr_t", c_schema))
+
+                array._export_to_c(ptr_array, ptr_schema)
+
+                name = ffi.new("char[]", name.encode("utf8"))
+                c_schema.name = name
+
+                schema.append(ptr_schema)
+                keepalive.append(name)
+                keepalive.append(c_schema)
+            else:
+                array._export_to_c(ptr_array)
+
+            arrays.append(ptr_array)
+            keepalive.append(c_array)
+
+    return schema, arrays, keepalive
+
+
 def _replay_single(
-    dname: str,
+    file: str | pa.Table,
     factors: List[Factor],
     *,
     predicate: Optional[Factor] = None,
@@ -174,22 +206,26 @@ def _replay_single(
     n_factor_jobs: int = 1,
     verbose: bool = False,
 ) -> Tuple[pa.Table, Set[str]]:
+    if not isinstance(file, pa.Table):
+        raise NotImplementedError
+
+    tb = cast(pa.Table, file)
+    schema = tb.schema
+    ffi_schema, ffi_arrays, keepalive = table_to_pointers(file)
+
     if predicate is not None:
         # put the predicate as the last
-        replay_result = _native_replay(
-            dname, [*factors, predicate], batch_size=batch_size, njobs=n_factor_jobs
-        )
+        # replay_result = _native_replay(dname, [*factors, predicate], batch_size=batch_size, njobs=n_factor_jobs)
+        replay_result = _native_replay(ffi_schema, ffi_arrays, [*factors, predicate], njobs=n_factor_jobs)
     else:
-        replay_result = _native_replay(
-            dname, factors, batch_size=batch_size, njobs=n_factor_jobs
-        )
+        replay_result = _native_replay(ffi_schema, ffi_arrays, factors, njobs=n_factor_jobs)
 
     table_datas, table_names = [], []
 
-    if index_col is not None:
-        index = pq.read_table(dname, columns=[index_col]).column(index_col)
-        table_datas.append(index)
-        table_names.append(index_col)
+    # if index_col is not None:
+    #     index = pq.read_table(dname, columns=[index_col]).column(index_col)
+    #     table_datas.append(index)
+    #     table_names.append(index_col)
 
     predicate_values = None
     for i, (data_ptr, schema_ptr) in replay_result["succeeded"].items():
@@ -202,7 +238,11 @@ def _replay_single(
             table_names.append(str(factors[i]))
 
     # Fill in the failed columns
-    N = replay_result["nrows"]
+    if isinstance(file, pa.Table):
+        N = len(file)
+    else:
+        raise NotImplementedError
+
     nanarr = pa.array(np.empty(N, "f8"), mask=np.ones(N, "b1"))
 
     for i, reason in replay_result["failed"].items():
@@ -215,10 +255,7 @@ def _replay_single(
         if verbose:
             print(f"{factors[i]} failed: {reason}", file=stderr)
 
-    tb = pa.Table.from_arrays(
-        table_datas,
-        names=table_names,
-    )
+    tb = pa.Table.from_arrays(table_datas, names=table_names)
 
     if trim:
         if index_col is not None:
@@ -227,9 +264,7 @@ def _replay_single(
         else:
             data_starts = 0
 
-        ready_offset = np.max(
-            [Factor(col).ready_offset() for col in tb.column_names[data_starts:]]
-        )
+        ready_offset = np.max([Factor(col).ready_offset() for col in tb.column_names[data_starts:]])
 
         tb = tb.slice(ready_offset)
 
@@ -238,9 +273,7 @@ def _replay_single(
             predicate_values = predicate_values.slice(ready_offset)
 
     if predicate is not None:
-        assert (
-            predicate_values is not None
-        ), "predicate_values is none, this is not possible"
+        assert predicate_values is not None, "predicate_values is none, this is not possible"
 
         # filter the table using the predicate
         tb = pc.filter(tb, pc.greater(predicate_values, 0.0))

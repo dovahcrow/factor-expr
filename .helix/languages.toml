@@ -1,0 +1,29 @@
+[[language]]
+name = "python"
+language-servers = [ "pyright", "ruff" ]
+# roots = ["pyproject.toml"]
+
+[language-server.pyright]
+command = "poetry"
+args = ["--directory", "python", "run", "pyright-langserver", "--stdio"]
+environment = { "PYTHONPATH" = "./python" }
+
+[language-server.pyright.config]
+reportMissingTypeStubs = false
+
+[language-server.pyright.config.python.analysis]
+typeCheckingMode = "basic"
+autoImportCompletions = true
+
+[language-server.ruff]
+command = "poetry"
+args = ["--directory", "python", "run", "ruff-lsp"]
+environment = { "PYTHONPATH" = "./python" }
+
+[language-server.ruff.config.settings]
+args = ["--ignore", "E501"]
+
+[language.formatter]
+command = "poetry"
+args = ["--directory", "python", "run", "ruff", "format", "--line-length", "120", "--silent", "-"]
+
