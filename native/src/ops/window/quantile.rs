@@ -9,47 +9,34 @@ use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::mem;
 
-#[derive(Clone)]
-struct Cache {
-    history: VecDeque<f64>,
-    ostree: OSTree<Float<Ascending>>, // sorted window
-}
-
-impl Cache {
-    pub fn new() -> Cache {
-        Cache {
-            history: VecDeque::new(),
-            ostree: OSTree::new(),
-        }
-    }
-}
-
 pub struct TSQuantile<T> {
     win_size: usize,
     quantile: f64,
     r: usize, // win_size * quantile
-    s: BoxOp<T>,
+    inner: BoxOp<T>,
 
-    cache: Cache,
-    warmup: usize,
+    window: VecDeque<f64>,
+    ostree: OSTree<Float<Ascending>>, // sorted window
+    i: usize,
 }
 
 impl<T> Clone for TSQuantile<T> {
     fn clone(&self) -> Self {
-        Self::new(self.win_size, self.quantile, self.s.clone())
+        Self::new(self.win_size, self.quantile, self.inner.clone())
     }
 }
 
 impl<T> TSQuantile<T> {
-    pub fn new(win_size: usize, quantile: f64, s: BoxOp<T>) -> Self {
+    pub fn new(win_size: usize, quantile: f64, inner: BoxOp<T>) -> Self {
         assert!(0. <= quantile && quantile <= 1.);
         Self {
             win_size,
-            s,
+            inner,
             quantile,
             r: ((win_size - 1) as f64 * quantile).floor() as usize,
-            cache: Cache::new(),
-            warmup: 0,
+            window: VecDeque::with_capacity(win_size),
+            ostree: OSTree::new(),
+            i: 0,
         }
     }
 }
@@ -61,49 +48,39 @@ impl<T> Named for TSQuantile<T> {
 impl<T: TickerBatch> Operator<T> for TSQuantile<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
-        let ss = &*self.s.update(tb)?;
+        let vals = &*self.inner.update(tb)?;
+        assert_eq!(tb.len(), vals.len());
 
-        let mut results = Vec::with_capacity(ss.len());
+        let mut results = Vec::with_capacity(tb.len());
 
-        let mut i = 0;
-        while i + self.warmup < self.s.ready_offset() && i < ss.len() {
-            results.push(f64::NAN);
-            i += 1;
-        }
+        for &val in vals {
+            if self.i < self.inner.ready_offset() {
+                results.push(f64::NAN);
+                self.i += 1;
+                continue;
+            }
 
-        while i + self.warmup < self.ready_offset() && i < ss.len() {
-            // maintain
-            let val = ss[i];
+            self.window.push_back(val);
+            self.ostree.increase(val.asc(), 1);
+            let val = if self.window.len() == self.win_size {
+                let (v, _) = self.ostree.select(self.r).unwrap();
+                let val = self.fchecked(v.0)?;
 
-            self.cache.history.push_back(val);
-            self.cache.ostree.increase(val.asc(), 1);
+                let to_remove = self.window.pop_front().unwrap().asc();
+                self.ostree.decrease(&to_remove, 1);
 
-            results.push(f64::NAN);
-            i += 1;
-        }
-        self.warmup += i;
-
-        for i in i..ss.len() {
-            let val = ss[i];
-
-            // maintain
-            self.cache.history.push_back(val);
-            self.cache.ostree.increase(val.asc(), 1);
-
-            // compute
-            let (v, _) = self.cache.ostree.select(self.r).unwrap();
-            results.push(self.fchecked(v.0)?);
-
-            // maintain
-            let to_remove = self.cache.history.pop_front().unwrap().asc();
-            self.cache.ostree.decrease(&to_remove, 1);
+                val
+            } else {
+                f64::NAN
+            };
+            results.push(val);
         }
 
         results.into()
     }
 
     fn ready_offset(&self) -> usize {
-        self.s.ready_offset() + self.win_size - 1
+        self.inner.ready_offset() + self.win_size - 1
     }
 
     fn to_string(&self) -> String {
@@ -112,16 +89,16 @@ impl<T: TickerBatch> Operator<T> for TSQuantile<T> {
             Self::NAME,
             self.win_size,
             self.quantile,
-            self.s.to_string(),
+            self.inner.to_string(),
         )
     }
 
     fn depth(&self) -> usize {
-        1 + self.s.depth()
+        1 + self.inner.depth()
     }
 
     fn len(&self) -> usize {
-        self.s.len() + 1
+        self.inner.len() + 1
     }
 
     fn child_indices(&self) -> Vec<usize> {
@@ -129,7 +106,7 @@ impl<T: TickerBatch> Operator<T> for TSQuantile<T> {
     }
 
     fn columns(&self) -> Vec<String> {
-        self.s.columns()
+        self.inner.columns()
     }
 
     #[throws(as Option)]
@@ -139,10 +116,10 @@ impl<T: TickerBatch> Operator<T> for TSQuantile<T> {
         }
         let i = i - 1;
 
-        let ns = self.s.len();
+        let ns = self.inner.len();
 
         if i < ns {
-            self.s.get(i)?
+            self.inner.get(i)?
         } else {
             throw!()
         }
@@ -155,13 +132,13 @@ impl<T: TickerBatch> Operator<T> for TSQuantile<T> {
         }
         let i = i - 1;
 
-        let ns = self.s.len();
+        let ns = self.inner.len();
 
         if i < ns {
             if i == 0 {
-                return mem::replace(&mut self.s, op) as BoxOp<T>;
+                return mem::replace(&mut self.inner, op) as BoxOp<T>;
             }
-            self.s.insert(i, op)?
+            self.inner.insert(i, op)?
         } else {
             throw!()
         }

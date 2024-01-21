@@ -6,43 +6,30 @@ use std::borrow::Cow;
 use std::mem;
 use std::{collections::VecDeque, iter::FromIterator};
 
-#[derive(Clone)]
-struct Cache {
-    history: VecDeque<f64>,
-    x: f64,
-}
-
-impl Cache {
-    pub fn new() -> Cache {
-        Cache {
-            history: VecDeque::new(),
-            x: 0.,
-        }
-    }
-}
-
 pub struct TSSkew<T> {
     win_size: usize,
-    s: BoxOp<T>,
+    inner: BoxOp<T>,
 
-    cache: Cache,
-    warmup: usize,
+    window: VecDeque<f64>,
+    sum: f64,
+    i: usize,
 }
 
 impl<T> Clone for TSSkew<T> {
     fn clone(&self) -> Self {
-        Self::new(self.win_size, self.s.clone())
+        Self::new(self.win_size, self.inner.clone())
     }
 }
 
 impl<T> TSSkew<T> {
-    pub fn new(win_size: usize, s: BoxOp<T>) -> Self {
+    pub fn new(win_size: usize, inner: BoxOp<T>) -> Self {
         Self {
             win_size,
-            s,
+            inner,
 
-            cache: Cache::new(),
-            warmup: 0,
+            window: VecDeque::with_capacity(win_size),
+            sum: 0.,
+            i: 0,
         }
     }
 }
@@ -54,85 +41,71 @@ impl<T> Named for TSSkew<T> {
 impl<T: TickerBatch> Operator<T> for TSSkew<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
-        let ss = &*self.s.update(tb)?;
+        let vals = &*self.inner.update(tb)?;
+        assert_eq!(tb.len(), vals.len());
 
-        let mut results = Vec::with_capacity(ss.len());
+        let mut results = Vec::with_capacity(tb.len());
 
-        let mut i = 0;
-
-        while i + self.warmup < self.s.ready_offset() && i < ss.len() {
-            results.push(f64::NAN);
-            i += 1;
-        }
-
-        while i + self.warmup < self.ready_offset() && i < ss.len() {
-            // maintain
-            self.cache.history.push_back(ss[i]);
-            self.cache.x += ss[i];
-
-            results.push(f64::NAN);
-            i += 1;
-        }
-        self.warmup += i;
-
-        for i in i..ss.len() {
-            let val = ss[i];
-            // maintain
-            self.cache.history.push_back(val);
-            self.cache.x += val;
-
-            // compute
-            let n = self.cache.history.len() as f64;
-            let mu = self.cache.x / n;
-            let m3 = self
-                .cache
-                .history
-                .iter()
-                .map(|x| (x - mu).powf(3.0))
-                .sum::<f64>()
-                / n;
-            let m2 = self
-                .cache
-                .history
-                .iter()
-                .map(|x| (x - mu).powf(2.0))
-                .sum::<f64>()
-                / n;
-
-            if m2 == 0. {
-                results.push(0.);
-            } else {
-                // do not use window function because this will overflow
-                // let m3 =
-                //     cache.xxx / n - 3. / n / n * cache.xx * cache.x + 2. / n.powf(3.) * cache.x.powf(3.);
-                // let m2 = cache.xx / n - cache.x * cache.x / n / n;
-                let correction = (n * (n - 1.)).sqrt() / (n - 2.);
-                let result = correction * m3 / m2.powf(1.5);
-
-                results.push(self.fchecked(result)?);
+        for &val in vals {
+            if self.i < self.inner.ready_offset() {
+                results.push(f64::NAN);
+                self.i += 1;
+                continue;
             }
 
-            // maintain
-            self.cache.x -= self.cache.history.pop_front().unwrap();
+            self.window.push_back(val);
+            self.sum += val;
+            let val = if self.window.len() == self.win_size {
+                let n = self.window.len() as f64;
+                let mu = self.sum / n;
+                let m3 = self.window.iter().map(|x| (x - mu).powf(3.0)).sum::<f64>() / n;
+                let m2 = self.window.iter().map(|x| (x - mu).powf(2.0)).sum::<f64>() / n;
+
+                let val = if m2 == 0. {
+                    0.
+                } else {
+                    // do not use window function because this will overflow
+                    // let m3 =
+                    //     cache.xxx / n - 3. / n / n * cache.xx * cache.x + 2. / n.powf(3.) * cache.x.powf(3.);
+                    // let m2 = cache.xx / n - cache.x * cache.x / n / n;
+                    let correction = (n * (n - 1.)).sqrt() / (n - 2.);
+                    let result = correction * m3 / m2.powf(1.5);
+
+                    self.fchecked(result)?
+                };
+
+                self.sum -= self.window.pop_front().unwrap();
+
+                val
+            } else {
+                f64::NAN
+            };
+
+            results.push(val);
         }
 
         results.into()
     }
 
     fn ready_offset(&self) -> usize {
-        self.s.ready_offset() + self.win_size - 1
+        self.inner.ready_offset() + self.win_size - 1
     }
 
     fn to_string(&self) -> String {
-        format!("({} {} {})", Self::NAME, self.win_size, self.s.to_string())
+        format!(
+            "({} {} {})",
+            Self::NAME,
+            self.win_size,
+            self.inner.to_string()
+        )
     }
 
     fn depth(&self) -> usize {
-        1 + self.s.depth()
+        1 + self.inner.depth()
     }
 
     fn len(&self) -> usize {
-        self.s.len() + 1
+        self.inner.len() + 1
     }
 
     fn child_indices(&self) -> Vec<usize> {
@@ -140,7 +113,7 @@ impl<T: TickerBatch> Operator<T> for TSSkew<T> {
     }
 
     fn columns(&self) -> Vec<String> {
-        self.s.columns()
+        self.inner.columns()
     }
 
     #[throws(as Option)]
@@ -150,10 +123,10 @@ impl<T: TickerBatch> Operator<T> for TSSkew<T> {
         }
         let i = i - 1;
 
-        let ns = self.s.len();
+        let ns = self.inner.len();
 
         if i < ns {
-            self.s.get(i)?
+            self.inner.get(i)?
         } else {
             throw!()
         }
@@ -166,13 +139,13 @@ impl<T: TickerBatch> Operator<T> for TSSkew<T> {
         }
         let i = i - 1;
 
-        let ns = self.s.len();
+        let ns = self.inner.len();
 
         if i < ns {
             if i == 0 {
-                return mem::replace(&mut self.s, op) as BoxOp<T>;
+                return mem::replace(&mut self.inner, op) as BoxOp<T>;
             }
-            self.s.insert(i, op)?
+            self.inner.insert(i, op)?
         } else {
             throw!()
         }

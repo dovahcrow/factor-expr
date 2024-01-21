@@ -7,43 +7,30 @@ use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::mem;
 
-#[derive(Clone)]
-struct Cache {
-    history: VecDeque<f64>,
-    x: f64,
-}
-
-impl Cache {
-    pub fn new() -> Cache {
-        Cache {
-            history: VecDeque::new(),
-            x: 0.,
-        }
-    }
-}
-
 pub struct TSSum<T> {
     win_size: usize,
-    s: BoxOp<T>,
+    inner: BoxOp<T>,
 
-    cache: Cache,
-    warmup: usize,
+    window: VecDeque<f64>,
+    sum: f64,
+    i: usize,
 }
 
 impl<T> Clone for TSSum<T> {
     fn clone(&self) -> Self {
-        Self::new(self.win_size, self.s.clone())
+        Self::new(self.win_size, self.inner.clone())
     }
 }
 
 impl<T> TSSum<T> {
-    pub fn new(win_size: usize, s: BoxOp<T>) -> Self {
+    pub fn new(win_size: usize, inner: BoxOp<T>) -> Self {
         Self {
             win_size,
-            s,
+            inner,
 
-            cache: Cache::new(),
-            warmup: 0,
+            window: VecDeque::with_capacity(win_size),
+            sum: 0.,
+            i: 0,
         }
     }
 }
@@ -55,55 +42,56 @@ impl<T> Named for TSSum<T> {
 impl<T: TickerBatch> Operator<T> for TSSum<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
-        let ss = &*self.s.update(tb)?;
+        let vals = &*self.inner.update(tb)?;
 
-        let mut results = Vec::with_capacity(ss.len());
+        assert_eq!(tb.len(), vals.len());
 
-        let mut i = 0;
-        while i + self.warmup < self.s.ready_offset() && i < ss.len() {
-            results.push(f64::NAN);
-            i += 1;
-        }
+        let mut results = Vec::with_capacity(tb.len());
 
-        while i + self.warmup < self.ready_offset() && i < ss.len() {
-            self.cache.history.push_back(ss[i]);
-            self.cache.x += ss[i];
+        for &val in vals {
+            if self.i < self.inner.ready_offset() {
+                results.push(f64::NAN);
+                self.i += 1;
+                continue;
+            }
 
-            results.push(f64::NAN);
-            i += 1;
-        }
-        self.warmup += i;
+            self.window.push_back(val);
+            self.sum += val;
+            let val = if self.window.len() == self.win_size {
+                let val = self.fchecked(self.sum)?;
 
-        for i in i..ss.len() {
-            let val = ss[i];
-            // maintain
-            self.cache.history.push_back(val);
-            self.cache.x += val;
+                self.sum -= self.window.pop_front().unwrap();
 
-            // compute
-            results.push(self.fchecked(self.cache.x)?);
+                val
+            } else {
+                f64::NAN
+            };
 
-            // maintain
-            self.cache.x -= self.cache.history.pop_front().unwrap();
+            results.push(val);
         }
 
         results.into()
     }
 
     fn ready_offset(&self) -> usize {
-        self.s.ready_offset() + self.win_size - 1
+        self.inner.ready_offset() + self.win_size - 1
     }
 
     fn to_string(&self) -> String {
-        format!("({} {} {})", Self::NAME, self.win_size, self.s.to_string())
+        format!(
+            "({} {} {})",
+            Self::NAME,
+            self.win_size,
+            self.inner.to_string()
+        )
     }
 
     fn depth(&self) -> usize {
-        1 + self.s.depth()
+        1 + self.inner.depth()
     }
 
     fn len(&self) -> usize {
-        self.s.len() + 1
+        self.inner.len() + 1
     }
 
     fn child_indices(&self) -> Vec<usize> {
@@ -111,7 +99,7 @@ impl<T: TickerBatch> Operator<T> for TSSum<T> {
     }
 
     fn columns(&self) -> Vec<String> {
-        self.s.columns()
+        self.inner.columns()
     }
 
     #[throws(as Option)]
@@ -121,10 +109,10 @@ impl<T: TickerBatch> Operator<T> for TSSum<T> {
         }
         let i = i - 1;
 
-        let ns = self.s.len();
+        let ns = self.inner.len();
 
         if i < ns {
-            self.s.get(i)?
+            self.inner.get(i)?
         } else {
             throw!()
         }
@@ -137,13 +125,13 @@ impl<T: TickerBatch> Operator<T> for TSSum<T> {
         }
         let i = i - 1;
 
-        let ns = self.s.len();
+        let ns = self.inner.len();
 
         if i < ns {
             if i == 0 {
-                return mem::replace(&mut self.s, op) as BoxOp<T>;
+                return mem::replace(&mut self.inner, op) as BoxOp<T>;
             }
-            self.s.insert(i, op)?
+            self.inner.insert(i, op)?
         } else {
             throw!()
         }

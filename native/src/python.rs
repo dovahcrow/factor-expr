@@ -129,6 +129,12 @@ pub fn replay<'py>(
     mut ops: Vec<Py<Factor>>,
     njobs: usize,
 ) -> PyResult<ReplayResult> {
+    if array.len() % schema.len() != 0 {
+        throw!(PyValueError::new_err(
+            "Number of arrays is not divisible by schema length"
+        ))
+    }
+
     let mut ops: Vec<_> = ops.iter_mut().map(|f| f.borrow_mut(py)).collect();
     let ops = ops
         .iter_mut()

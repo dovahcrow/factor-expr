@@ -22,10 +22,10 @@ impl<T> Clone for Delay<T> {
 }
 
 impl<T> Delay<T> {
-    pub fn new(win_size: usize, s: BoxOp<T>) -> Self {
+    pub fn new(win_size: usize, inner: BoxOp<T>) -> Self {
         Self {
             win_size,
-            inner: s,
+            inner,
             window: VecDeque::with_capacity(win_size + 1),
             i: 0,
         }
