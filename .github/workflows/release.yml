@@ -8,10 +8,10 @@ on:
 jobs:
   linux:
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
+    container: quay.io/pypa/manylinux_2_28
     strategy:
       matrix:
-        python-version: [ 39, 310, 311, 312 ]
+        python-version: [ 311, 312 ]
     steps:
       - uses: actions/checkout@v2
       - name: Set python version
@@ -44,7 +44,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v2
 
