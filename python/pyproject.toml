@@ -16,12 +16,11 @@ keywords = ["factor", "expression", "alpha", "S-expression", "quantative trading
 license = "MIT"
 name = "factor_expr"
 readme = "README.md"
-version = "0.2.3"
+version = "0.3.0"
 
 [tool.poetry.dependencies]
 numpy = "^1.26"
-pandas = "^2"
-pyarrow = "^14"
+pyarrow = {extras = ["cffi"], version = "^15.0.0"}
 python = "^3.11"
 tqdm = "^4"
 
@@ -30,7 +29,9 @@ ruff = "^0.1.13"
 python-lsp-ruff = "^2.0.2"
 pyright = "^1.1.347"
 docopt = "^0.6.2"
-pytest = "^6.2.3"
+cffi = "^1.16.0"
+pytest = "^7.4.4"
+pandas = "^2.2.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

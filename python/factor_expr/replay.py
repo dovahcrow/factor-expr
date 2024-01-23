@@ -7,7 +7,6 @@ from functools import partial
 from tqdm.auto import tqdm
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pyarrow.compute as pc

@@ -16,11 +16,10 @@ def test_gt():
             [FILENAME],
             [Factor("(> :price_ask_l1_open 0)")],
             pbar=False,
-            index_col="time",
         )
     )
 
-    assert ((df.price_ask_l1_open > 0).values == result.iloc[:, 0].values).all()
+    assert ((df.price_ask_l1_open > 0).values == result.to_pandas().iloc[:, 0].values).all()
 
 
 def test_gte():
@@ -31,11 +30,10 @@ def test_gte():
             [FILENAME],
             [Factor("(>= :price_ask_l1_low 0)")],
             pbar=False,
-            index_col="time",
         )
     )
 
-    assert ((df.price_ask_l1_low >= 0).values == result.iloc[:, 0].values).all()
+    assert ((df.price_ask_l1_low >= 0).values == result.to_pandas().iloc[:, 0].values).all()
 
 
 def test_lt():
@@ -46,11 +44,10 @@ def test_lt():
             [FILENAME],
             [Factor("(< :price_ask_l1_high 0)")],
             pbar=False,
-            index_col="time",
         )
     )
 
-    assert ((df.price_ask_l1_high < 0).values == result.iloc[:, 0].values).all()
+    assert ((df.price_ask_l1_high < 0).values == result.to_pandas().iloc[:, 0].values).all()
 
 
 def test_lte():
@@ -61,11 +58,10 @@ def test_lte():
             [FILENAME],
             [Factor("(<= :price_ask_l1_close 0)")],
             pbar=False,
-            index_col="time",
         )
     )
 
-    assert ((df.price_ask_l1_close <= 0).values == result.iloc[:, 0].values).all()
+    assert ((df.price_ask_l1_close <= 0).values == result.to_pandas().iloc[:, 0].values).all()
 
 
 def test_or():
@@ -79,8 +75,7 @@ def test_or():
     )
 
     assert (
-        ((df.price_ask_l1_close < 0).values | (df.price_bid_l1_high > 0).values)
-        == result.iloc[:, 0].values
+        ((df.price_ask_l1_close < 0).values | (df.price_bid_l1_high > 0).values) == result.to_pandas().iloc[:, 0].values
     ).all()
 
 
@@ -95,8 +90,7 @@ def test_and():
     )
 
     assert (
-        ((df.price_ask_l1_open < 0).values & (df.price_bid_l1_low > 0).values)
-        == result.iloc[:, 0].values
+        ((df.price_ask_l1_open < 0).values & (df.price_bid_l1_low > 0).values) == result.to_pandas().iloc[:, 0].values
     ).all()
 
 
@@ -111,8 +105,7 @@ def test_not():
     )
 
     assert (
-        ~((df.price_ask_l1_close < 0).values & (df.price_bid_l1_low > 0).values)
-        == result.iloc[:, 0].values
+        ~((df.price_ask_l1_close < 0).values & (df.price_bid_l1_low > 0).values) == result.to_pandas().iloc[:, 0].values
     ).all()
 
 
@@ -122,13 +115,8 @@ def test_if():
     result = asyncio.run(
         replay(
             [FILENAME],
-            [
-                Factor(
-                    "(If (< :price_ask_l1_high 0) :price_ask_l1_close :price_bid_l1_open)"
-                )
-            ],
+            [Factor("(If (< :price_ask_l1_high 0) :price_ask_l1_close :price_bid_l1_open)")],
             pbar=False,
-            index_col="time",
         )
     )
 
@@ -138,5 +126,5 @@ def test_if():
             df.price_ask_l1_close.values,
             df.price_bid_l1_open.values,
         )
-        == result.iloc[:, 0].values
+        == result.to_pandas().iloc[:, 0].values
     ).all()

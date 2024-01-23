@@ -84,10 +84,11 @@ macro_rules! impl_minmax {
 
                         self.window.push_back((self.seq, val));
 
-                        let val = if self.window.len() == self.win_size {
+                        let val = if self.i >= self.ready_offset() {
                             let val = ($($vfunc)+) (&self.window, self.seq, self.win_size);
                             val
                         } else {
+                            self.i += 1;
                             f64::NAN
                         };
                         results.push(val);
