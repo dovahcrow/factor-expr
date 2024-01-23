@@ -75,7 +75,7 @@ pub fn replay_file<O>(
     path: &str,
     ops: Vec<&mut (dyn Operator<RecordBatch>)>,
     batch_size: O,
-) -> (usize, HashMap<usize, Float64Array>, HashMap<usize, Error>)
+) -> (HashMap<usize, Float64Array>, HashMap<usize, Error>)
 where
     O: Into<Option<usize>>,
 {
@@ -116,5 +116,5 @@ where
         Some(nrows),
     )?;
 
-    (nrows, succeeded, failed)
+    (succeeded, failed)
 }

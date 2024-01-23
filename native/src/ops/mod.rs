@@ -33,6 +33,7 @@ where
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]>;
     fn ready_offset(&self) -> usize; // A.K.A. at offset the output of factor is first time not nan
     fn to_string(&self) -> String;
+    fn reset(&mut self);
 
     fn len(&self) -> usize;
     fn depth(&self) -> usize;

@@ -5,6 +5,8 @@ use fehler::{throw, throws};
 use std::borrow::Cow;
 
 impl<T: TickerBatch> Operator<T> for f64 {
+    fn reset(&mut self) {}
+
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         vec![*self; tb.len()].into()

@@ -23,6 +23,7 @@ impl<T> LogReturn<T> {
         Self {
             win_size,
             inner,
+
             window: VecDeque::with_capacity(win_size + 1),
             i: 0,
         }
@@ -34,6 +35,12 @@ impl<T> Named for LogReturn<T> {
 }
 
 impl<T: TickerBatch> Operator<T> for LogReturn<T> {
+    fn reset(&mut self) {
+        self.inner.reset();
+        self.window.clear();
+        self.i = 0;
+    }
+
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;

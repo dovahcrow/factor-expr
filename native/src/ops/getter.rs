@@ -24,6 +24,8 @@ impl Named for Getter {
 }
 
 impl<T: TickerBatch> Operator<T> for Getter {
+    fn reset(&mut self) {}
+
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         if matches!(self.idx, None) {

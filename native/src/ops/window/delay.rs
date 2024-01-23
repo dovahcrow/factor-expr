@@ -34,6 +34,12 @@ impl<T> Named for Delay<T> {
 }
 
 impl<T: TickerBatch> Operator<T> for Delay<T> {
+    fn reset(&mut self) {
+        self.inner.reset();
+        self.window.clear();
+        self.i = 0;
+    }
+
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;

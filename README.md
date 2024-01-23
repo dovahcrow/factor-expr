@@ -14,7 +14,7 @@
 <th>Factor Values</th>
 </tr>
 <tr>
-<td>(TSLogReturn 30 :close)</td>
+<td>(LogReturn 30 :close)</td>
 <td>+</td>
 <td>2019-12-27~2020-01-14.pq</td>
 <td>=</td>
@@ -73,7 +73,7 @@ For example, on a daily OHLC dataset, the 30 days log return on the column `clos
 ```python
 from factor_expr import Factor
 
-Factor("(TSLogReturn 30 :close)")
+Factor("(LogReturn 30 :close)")
 ```
 
 Note, in `Factor Expr`, column names are referred by the `:column-name` syntax.
@@ -87,7 +87,7 @@ from factor_expr import Factor, replay
 
 result = await replay(
     ["data.pq"],
-    [Factor("(TSLogReturn 30 :close)")]
+    [Factor("(LogReturn 30 :close)")]
 )
 ```
 
@@ -99,7 +99,7 @@ In case of multiple datasets are passed in, the results will be concatenated wit
 
 For example, the code above will give you a DataFrame looks similar to this:
 
-| index | (TSLogReturn 30 :close) |
+| index | (LogReturn 30 :close) |
 | ----- | ----------------------- |
 | 0     | 0.23                    |
 | ...   | ...                     |
@@ -150,24 +150,24 @@ Any `<expr>` larger than 0 are treated as `true`.
 
 All the window functions take a window size as the first argument. The computation will be done on the look-back window with the size given in `<const>`.
 
-* Sum of the window elements: `(TSSum <const> <expr>)`
-* Mean of the window elements: `(TSMean <const> <expr>)`
-* Min of the window elements: `(TSMin <const> <expr>)`
-* Max of the window elements: `(TSMax <const> <expr>)`
-* The index of the min of the window elements: `(TSArgMin <const> <expr>)`
-* The index of the max of the window elements: `(TSArgMax <const> <expr>)`
-* Stdev of the window elements: `(TSStd <const> <expr>)`
-* Skew of the window elements: `(TSSkew <const> <expr>)`
-* The rank (ascending) of the current element in the window: `(TSRank <const> <expr>)`
+* Sum of the window elements: `(Sum <const> <expr>)`
+* Mean of the window elements: `(Mean <const> <expr>)`
+* Min of the window elements: `(Min <const> <expr>)`
+* Max of the window elements: `(Max <const> <expr>)`
+* The index of the min of the window elements: `(ArgMin <const> <expr>)`
+* The index of the max of the window elements: `(ArgMax <const> <expr>)`
+* Stdev of the window elements: `(Std <const> <expr>)`
+* Skew of the window elements: `(Skew <const> <expr>)`
+* The rank (ascending) of the current element in the window: `(Rank <const> <expr>)`
 * The value `<const>` ticks back: `(Delay <const> <expr>)`
-* The log return of the value `<const>` ticks back to current value: `(TSLogReturn <const> <expr>)`
-* Rolling correlation between two series: `(TSCorrelation <const> <expr> <expr>)`
-* Rolling quantile of a series: `(TSQuantile <const> <const> <expr>)`, e.g. `(TSQuantile 100 0.5 <expr>)` computes the median of a window sized 100.
+* The log return of the value `<const>` ticks back to current value: `(LogReturn <const> <expr>)`
+* Rolling correlation between two series: `(Correlation <const> <expr> <expr>)`
+* Rolling quantile of a series: `(Quantile <const> <const> <expr>)`, e.g. `(Quantile 100 0.5 <expr>)` computes the median of a window sized 100.
 
 #### Warm-up Period for Window Functions
 
 Factors containing window functions require a warm-up period. For example, for
-`(TSSum 10 :close)`, it will not generate data until the 10th tick is replayed.
+`(Sum 10 :close)`, it will not generate data until the 10th tick is replayed.
 In this case, `replay` will write `NaN` into the result during the warm-up period, until the factor starts to produce data.
 This ensures the length of the factor output will be as same as the length of the input dataset. You can use the `trim`
 parameter to let replay trim off the warm-up period before it returns.
@@ -194,7 +194,7 @@ pd.DataFrame({
 
 result = await replay(
     ["data.pq"],
-    [Factor("(TSLogReturn 30 :close)")],
+    [Factor("(LogReturn 30 :close)")],
     index_col="time",
 )
 ```
@@ -294,13 +294,11 @@ async def replay(
     files: Iterable[str],
     factors: List[Factor],
     *,
-    predicate: Optional[Factor] = None,
+    reset: bool = True,
     batch_size: int = 40960,
     n_data_jobs: int = 1,
     n_factor_jobs: int = 1,
     pbar: bool = True,
-    trim: bool = False,
-    index_col: Optional[str] = None,
     verbose: bool = False,
     output: Literal["pandas", "pyarrow", "raw"] = "pandas",
 ) -> Union[pd.DataFrame, pa.Table]:
@@ -309,12 +307,13 @@ async def replay(
 
     Parameters
     ----------
-    files: Iterable[str]
-        Paths to the datasets. Currently, only parquet format is supported.
+    files: Iterable[str | pa.Table]
+        Paths to the datasets. Or already read pyarrow Tables.
     factors: List[Factor]
-        A list of Factors to replay on the given set of files.
-    predicate: Optional[Factor] = None
-        Use a predicate to pre-filter the replay result. Any value larger than 0 is treated as True.
+        A list of Factors to replay.
+    reset: bool = True
+        Whether to reset the factors. Factors carries memory about the data they already replayed. If you are calling
+        replay multiple times and the factors should not starting from fresh, set this to False.
     batch_size: int = 40960
         How many rows to replay at one time. Default is 40960 rows.
     n_data_jobs: int = 1
@@ -324,14 +323,10 @@ async def replay(
         e.g. if `n_data_jobs=3` and `n_factor_jobs=5`, you will have 3 * 5 threads running concurrently.
     pbar: bool = True
         Whether to show the progress bar using tqdm.
-    trim: bool = False
-        Whether to trim the warm up period off from the result.
-    index_col: Optional[str] = None
-        Set the index column.
     verbose: bool = False
         If True, failed factors will be printed out in stderr.
-    output: Literal["pandas" | "pyarrow" | "raw"] = "pandas"
-        The return format, can be pandas DataFrame ("pandas") or pyarrow Table ("pyarrow") or un-concatenated pyarrow Tables ("raw").
+    output: Literal["pyarrow" | "raw"] = "pyarrow"
+        The return format, can be pyarrow Table ("pyarrow") or un-concatenated pyarrow Tables ("raw").
     """
 ```
 

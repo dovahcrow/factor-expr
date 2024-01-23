@@ -41,6 +41,13 @@ impl<T> Named for Rank<T> {
 }
 
 impl<T: TickerBatch> Operator<T> for Rank<T> {
+    fn reset(&mut self) {
+        self.inner.reset();
+        self.window.clear();
+        self.ostree.clear();
+        self.i = 0;
+    }
+
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;

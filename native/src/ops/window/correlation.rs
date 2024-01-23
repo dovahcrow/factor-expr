@@ -4,31 +4,15 @@ use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
 use std::{borrow::Cow, cmp::max, collections::VecDeque, iter::FromIterator, mem};
 
-#[derive(Clone)]
-struct Cache {
-    history: VecDeque<(f64, f64)>,
-
-    x: f64,
-    y: f64,
-}
-
-impl Cache {
-    fn new() -> Cache {
-        Cache {
-            history: VecDeque::new(),
-
-            x: 0.,
-            y: 0.,
-        }
-    }
-}
-
 pub struct Correlation<T> {
     win_size: usize,
     x: BoxOp<T>,
     y: BoxOp<T>,
 
-    cache: Cache,
+    window: VecDeque<(f64, f64)>,
+
+    xsum: f64,
+    ysum: f64,
     i: usize,
 }
 
@@ -45,7 +29,9 @@ impl<T> Correlation<T> {
             x,
             y,
 
-            cache: Cache::new(),
+            window: VecDeque::new(),
+            xsum: 0.,
+            ysum: 0.,
             i: 0,
         }
     }
@@ -56,6 +42,15 @@ impl<T> Named for Correlation<T> {
 }
 
 impl<T: TickerBatch> Operator<T> for Correlation<T> {
+    fn reset(&mut self) {
+        self.x.reset();
+        self.y.reset();
+        self.window.clear();
+        self.xsum = 0.;
+        self.ysum = 0.;
+        self.i = 0;
+    }
+
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let (x, y) = (&mut self.x, &mut self.y);
@@ -77,30 +72,27 @@ impl<T: TickerBatch> Operator<T> for Correlation<T> {
                 continue;
             }
 
-            self.cache.history.push_back((xval, yval));
-            self.cache.x += xval;
-            self.cache.y += yval;
+            self.window.push_back((xval, yval));
+            self.xsum += xval;
+            self.ysum += yval;
 
-            let val = if self.cache.history.len() == self.win_size {
-                let n = self.cache.history.len() as f64; // this should be equal to self.win_size
-                let xbar = self.cache.x / n;
-                let ybar = self.cache.y / n;
+            let val = if self.window.len() == self.win_size {
+                let n = self.window.len() as f64; // this should be equal to self.win_size
+                let xbar = self.xsum / n;
+                let ybar = self.ysum / n;
                 let nom = self
-                    .cache
-                    .history
+                    .window
                     .iter()
                     .map(|(x, y)| (x - xbar) * (y - ybar))
                     .sum::<f64>();
                 let denomx = self
-                    .cache
-                    .history
+                    .window
                     .iter()
                     .map(|(x, _)| (x - xbar).powf(2.))
                     .sum::<f64>()
                     .sqrt();
                 let denomy = self
-                    .cache
-                    .history
+                    .window
                     .iter()
                     .map(|(_, y)| (y - ybar).powf(2.))
                     .sum::<f64>()
@@ -113,9 +105,9 @@ impl<T: TickerBatch> Operator<T> for Correlation<T> {
                 } else {
                     self.fchecked(nom / denom)?
                 };
-                let (xval, yval) = self.cache.history.pop_front().unwrap();
-                self.cache.x -= xval;
-                self.cache.y -= yval;
+                let (xval, yval) = self.window.pop_front().unwrap();
+                self.xsum -= xval;
+                self.ysum -= yval;
                 val
             } else {
                 f64::NAN

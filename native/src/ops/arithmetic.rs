@@ -30,6 +30,12 @@ macro_rules! impl_arithmetic_bivariate {
             }
 
             impl<T: TickerBatch> Operator<T> for $op<T> {
+                fn reset(&mut self) {
+                    self.l.reset();
+                    self.r.reset();
+                    self.i = 0;
+                }
+
                 #[throws(Error)]
                 fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
                     let (l, r) = (&mut self.l, &mut self.r);
@@ -188,6 +194,11 @@ macro_rules! impl_arithmetic_univariate {
             }
 
             impl<T: TickerBatch> Operator<T> for $op<T> {
+                fn reset(&mut self) {
+                    self.inner.reset();
+                    self.i = 0;
+                }
+
                 #[throws(Error)]
                 fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
                     let vals = &*self.inner.update(tb)?;
@@ -301,20 +312,20 @@ macro_rules! impl_arithmetic_univariate_1arg {
     ($([$name:tt => $op:ident: $($func:tt)+])+) => {
         $(
             pub struct $op<T> {
-                s: BoxOp<T>,
+                inner: BoxOp<T>,
                 p: f64,
                 i: usize,
             }
 
             impl<T> Clone for $op<T> {
                 fn clone(&self) -> Self {
-                    Self::new(self.p, self.s.clone())
+                    Self::new(self.p, self.inner.clone())
                 }
             }
 
             impl<T> $op<T> {
-                pub fn new(p: f64, s: BoxOp<T>) -> Self {
-                    Self { p, s, i: 0 }
+                pub fn new(p: f64, inner: BoxOp<T>) -> Self {
+                    Self { p, inner, i: 0 }
                 }
             }
 
@@ -323,16 +334,21 @@ macro_rules! impl_arithmetic_univariate_1arg {
             }
 
             impl<T: TickerBatch> Operator<T> for $op<T> {
+                fn reset(&mut self) {
+                    self.inner.reset();
+                    self.i = 0;
+                }
+
                 #[throws(Error)]
                 fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
-                    let vals = &*self.s.update(tb)?;
+                    let vals = &*self.inner.update(tb)?;
                     #[cfg(feature = "check")]
                     assert_eq!(tb.len(), vals.len());
 
                     let mut results = Vec::with_capacity(tb.len());
 
                     for &val in vals {
-                        if self.i < self.s.ready_offset() {
+                        if self.i < self.inner.ready_offset() {
                             #[cfg(feature = "check")]
                             assert!(val.is_nan());
                             results.push(f64::NAN);
@@ -348,19 +364,19 @@ macro_rules! impl_arithmetic_univariate_1arg {
                 }
 
                 fn ready_offset(&self) -> usize {
-                    self.s.ready_offset()
+                    self.inner.ready_offset()
                 }
 
                 fn to_string(&self) -> String {
-                    format!("({} {} {})", Self::NAME, self.p, self.s.to_string())
+                    format!("({} {} {})", Self::NAME, self.p, self.inner.to_string())
                 }
 
                 fn depth(&self) -> usize {
-                    1 + self.s.depth()
+                    1 + self.inner.depth()
                 }
 
                 fn len(&self) -> usize {
-                    self.s.len() + 1
+                    self.inner.len() + 1
                 }
 
                 fn child_indices(&self) -> Vec<usize> {
@@ -368,7 +384,7 @@ macro_rules! impl_arithmetic_univariate_1arg {
                 }
 
                 fn columns(&self) -> Vec<String> {
-                    self.s.columns()
+                    self.inner.columns()
                 }
 
                 #[throws(as Option)]
@@ -378,10 +394,10 @@ macro_rules! impl_arithmetic_univariate_1arg {
                     }
                     let i = i - 1;
 
-                    let ns = self.s.len();
+                    let ns = self.inner.len();
 
                     if i < ns {
-                        self.s.get(i)?
+                        self.inner.get(i)?
                     } else {
                         throw!()
                     }
@@ -394,13 +410,13 @@ macro_rules! impl_arithmetic_univariate_1arg {
                     }
                     let i = i - 1;
 
-                    let ns = self.s.len();
+                    let ns = self.inner.len();
 
                     if i < ns {
                         if i == 0 {
-                            return mem::replace(&mut self.s, op)  as BoxOp<T>;
+                            return mem::replace(&mut self.inner, op)  as BoxOp<T>;
                         }
-                        self.s.insert(i, op)?
+                        self.inner.insert(i, op)?
                     } else {
                         throw!()
                     }

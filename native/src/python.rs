@@ -44,6 +44,10 @@ impl Factor {
         self.op.ready_offset()
     }
 
+    pub fn reset(&mut self) {
+        self.op.reset()
+    }
+
     pub fn replace<'p>(&self, i: usize, other: PyRef<'p, Factor>) -> PyResult<Factor> {
         if i == 0 {
             return Ok(Factor {
@@ -172,6 +176,45 @@ pub fn replay<'py>(
         .allow_threads(|| -> Result<_> {
             let pool = rayon::ThreadPoolBuilder::new().num_threads(njobs).build()?;
             Ok(pool.install(|| crate::replay::replay(rbs.iter().map(Cow::Borrowed), ops, None))?)
+        })
+        .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
+
+    Ok(ReplayResult {
+        succeeded: succeeded
+            .into_iter()
+            .map(|(k, v)| {
+                let data = v.into_data();
+                let (array, schema) = ffi::to_ffi(&data).unwrap();
+                let array = Box::into_raw(Box::new(array));
+                let schema = Box::into_raw(Box::new(schema));
+
+                (k, (array as usize, schema as usize))
+            })
+            .collect(),
+        failed: failed
+            .into_iter()
+            .map(|(k, v)| (k, format!("{}", v)))
+            .collect(),
+    })
+}
+
+#[pyfunction]
+pub fn replay_file<'py>(
+    py: Python<'py>,
+    file: &str,
+    mut ops: Vec<Py<Factor>>,
+    njobs: usize,
+) -> PyResult<ReplayResult> {
+    let mut ops: Vec<_> = ops.iter_mut().map(|f| f.borrow_mut(py)).collect();
+    let ops = ops
+        .iter_mut()
+        .map(|f| (&mut *f.op) as &mut dyn Operator<RecordBatch>)
+        .collect();
+
+    let (succeeded, failed) = py
+        .allow_threads(|| -> Result<_> {
+            let pool = rayon::ThreadPoolBuilder::new().num_threads(njobs).build()?;
+            Ok(pool.install(|| crate::replay::replay_file(file, ops, None))?)
         })
         .map_err(|e| PyValueError::new_err(format!("{}", e)))?;
 

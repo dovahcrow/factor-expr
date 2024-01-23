@@ -21,6 +21,7 @@ fn _lib(py: Python, m: &PyModule) -> PyResult<()> {
     )?;
     m.add_class::<Factor>()?;
     m.add_function(wrap_pyfunction!(python::replay, m)?)?;
+    m.add_function(wrap_pyfunction!(python::replay_file, m)?)?;
 
     Ok(())
 }

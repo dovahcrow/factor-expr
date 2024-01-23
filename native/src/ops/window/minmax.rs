@@ -4,21 +4,6 @@ use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
 use std::{borrow::Cow, collections::VecDeque, iter::FromIterator, mem};
 
-#[derive(Clone)]
-struct Cache {
-    history: VecDeque<(usize, f64)>,
-    seq: usize,
-}
-
-impl Cache {
-    fn new() -> Cache {
-        Cache {
-            history: VecDeque::new(),
-            seq: 0,
-        }
-    }
-}
-
 macro_rules! impl_minmax {
     ($($op:ident $cmp:tt {$($vfunc:tt)+})+) => {
         $(
@@ -26,7 +11,8 @@ macro_rules! impl_minmax {
                 win_size: usize,
                 inner: BoxOp<T>,
 
-                cache: Cache,
+                window: VecDeque<(usize, f64)>,
+                seq: usize,
                 i: usize,
             }
 
@@ -42,7 +28,8 @@ macro_rules! impl_minmax {
                         win_size,
                         inner,
 
-                        cache: Cache::new(),
+                        window: VecDeque::new(),
+                        seq: 0,
                         i: 0,
                     }
                 }
@@ -53,6 +40,13 @@ macro_rules! impl_minmax {
             }
 
             impl<T: TickerBatch> Operator<T> for $op<T> {
+                fn reset(&mut self) {
+                    self.inner.reset();
+                    self.window.clear();
+                    self.seq = 0;
+                    self.i = 0;
+                }
+
                 #[throws(Error)]
                 fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
                     let vals = &*self.inner.update(tb)?;
@@ -70,28 +64,28 @@ macro_rules! impl_minmax {
                             continue;
                         }
 
-                        self.cache.seq += 1;
+                        self.seq += 1;
 
-                        while let Some((seq_old, _)) = self.cache.history.front() {
-                            if seq_old + self.win_size <= self.cache.seq {
-                                self.cache.history.pop_front();
+                        while let Some((seq_old, _)) = self.window.front() {
+                            if seq_old + self.win_size <= self.seq {
+                                self.window.pop_front();
                             } else {
                                 break;
                             }
                         }
 
-                        while let Some((_, last_val)) = self.cache.history.back() {
+                        while let Some((_, last_val)) = self.window.back() {
                             if val $cmp *last_val {
-                                self.cache.history.pop_back();
+                                self.window.pop_back();
                             } else {
                                 break;
                             }
                         }
 
-                        self.cache.history.push_back((self.cache.seq, val));
+                        self.window.push_back((self.seq, val));
 
-                        let val = if self.cache.history.len() == self.win_size {
-                            let val = ($($vfunc)+) (&self.cache, self.win_size);
+                        let val = if self.window.len() == self.win_size {
+                            let val = ($($vfunc)+) (&self.window, self.seq, self.win_size);
                             val
                         } else {
                             f64::NAN
@@ -182,8 +176,8 @@ macro_rules! impl_minmax {
 }
 
 impl_minmax! {
-    Min < { |cache: &Cache, _: usize| cache.history.front().unwrap().1 }
-    Max > { |cache: &Cache, _: usize| cache.history.front().unwrap().1 }
-    ArgMin < { |cache: &Cache, win_size: usize| (cache.history.front().unwrap().0 + win_size - cache.seq - 1) as f64 }
-    ArgMax > { |cache: &Cache, win_size: usize| (cache.history.front().unwrap().0 + win_size - cache.seq - 1) as f64 }
+    Min < { |window: &VecDeque<(usize, f64)>, _: usize, _: usize| window.front().unwrap().1 }
+    Max > { |window: &VecDeque<(usize, f64)>, _: usize, _: usize| window.front().unwrap().1 }
+    ArgMin < { |window: &VecDeque<(usize, f64)>, seq: usize, win_size: usize| (window.front().unwrap().0 + win_size - seq - 1) as f64 }
+    ArgMax > { |window: &VecDeque<(usize, f64)>, seq: usize, win_size: usize| (window.front().unwrap().0 + win_size - seq - 1) as f64 }
 }

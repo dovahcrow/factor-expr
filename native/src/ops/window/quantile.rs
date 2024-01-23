@@ -33,6 +33,7 @@ impl<T> Quantile<T> {
             inner,
             quantile,
             r: ((win_size - 1) as f64 * quantile).floor() as usize,
+
             window: VecDeque::with_capacity(win_size),
             ostree: OSTree::new(),
             i: 0,
@@ -45,6 +46,13 @@ impl<T> Named for Quantile<T> {
 }
 
 impl<T: TickerBatch> Operator<T> for Quantile<T> {
+    fn reset(&mut self) {
+        self.inner.reset();
+        self.window.clear();
+        self.ostree.clear();
+        self.i = 0;
+    }
+
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;

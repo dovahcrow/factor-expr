@@ -34,6 +34,13 @@ impl<T> Named for If<T> {
 }
 
 impl<T: TickerBatch> Operator<T> for If<T> {
+    fn reset(&mut self) {
+        self.cond.reset();
+        self.btrue.reset();
+        self.bfalse.reset();
+        self.i = 0;
+    }
+
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let cond = &mut self.cond;
@@ -224,6 +231,12 @@ macro_rules! impl_logic_bivariate {
 
             impl<T: TickerBatch> Operator<T> for $op<T>
             {
+                fn reset(&mut self) {
+                    self.l.reset();
+                    self.r.reset();
+                    self.i = 0;
+                }
+
                 #[throws(Error)]
                 fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
                     let (l, r) = (&mut self.l, &mut self.r);
@@ -384,6 +397,11 @@ impl<T> Named for Not<T> {
 }
 
 impl<T: TickerBatch> Operator<T> for Not<T> {
+    fn reset(&mut self) {
+        self.inner.reset();
+        self.i = 0;
+    }
+
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;
