@@ -2,9 +2,8 @@ name: release
 
 on: 
   push:
-    branches:
-      - prerelease
-      - release
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
   linux:
@@ -12,23 +11,14 @@ jobs:
     container: quay.io/pypa/manylinux2014_x86_64
     strategy:
       matrix:
-        python-version: [ 38, 39 ]
+        python-version: [ 39, 310, 311, 312 ]
     steps:
       - uses: actions/checkout@v2
       - name: Set python version
         run: |
-          if [[ "${{ matrix.python-version }}" == "37" ]]; then
-            echo "/opt/python/cp37-cp37m/bin" >> $GITHUB_PATH
-          else
-            echo "/opt/python/cp${{ matrix.python-version }}-cp${{ matrix.python-version }}/bin" >> $GITHUB_PATH
-          fi
+          echo "/opt/python/cp${{ matrix.python-version }}-cp${{ matrix.python-version }}/bin" >> $GITHUB_PATH
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: rustfmt
-          default: true
+      - uses: dtolnay/rust-toolchain@1.75.0
 
       - name: Install tools
         run: |
@@ -44,7 +34,7 @@ jobs:
           ls python/dist
 
       - name: Persist artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: "linux-${{ matrix.python-version }}"
           path: python/dist/*.whl
@@ -53,8 +43,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-10.15, windows-latest]
-        python-version: ["3.8", "3.9"]
+        os: [macos-latest, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v2
 
@@ -64,12 +54,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           architecture: x64
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          components: rustfmt
-          default: true
+      - uses: dtolnay/rust-toolchain@1.75.0
 
       - name: Install tools
         run: |
@@ -94,7 +79,7 @@ jobs:
     needs: [win32-and-darwin, linux]
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
 
       - name: Setup environment
         run: |
@@ -105,7 +90,6 @@ jobs:
         run: pip install twine
 
       - name: Upload to PyPI site
-        if: github.ref == 'refs/heads/release'
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: |
@@ -113,15 +97,3 @@ jobs:
           do
             twine upload --non-interactive -u __token__ -p $PYPI_TOKEN $file || continue
           done
-          
-      - name: Upload to PyPI test site
-        if: github.ref == 'refs/heads/prerelease'
-        env:
-          PYPI_TEST_TOKEN: ${{ secrets.PYPI_TEST_TOKEN }}
-        run: |
-          for file in $(ls **/*.whl)
-          do
-            twine upload --non-interactive --repository-url https://test.pypi.org/legacy/ -u __token__ -p $PYPI_TEST_TOKEN $file || continue
-          done
-
-      
