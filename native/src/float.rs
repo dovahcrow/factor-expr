@@ -1,8 +1,10 @@
 /// copied from float_ord library
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
-use std::fmt::{Debug, Display};
-use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
+use std::{
+    fmt::{Debug, Display},
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+};
 
 pub trait SortOrder {
     fn convert(f: f64) -> u64;
@@ -104,11 +106,12 @@ impl Into<Float<Descending>> for f64 {
 #[cfg(test)]
 mod tests {
     use super::{Ascending, Descending, Float};
-    use rand::distributions::Uniform;
-    use rand::{thread_rng, Rng};
-    use std::collections::hash_map::DefaultHasher;
-    use std::f64::{INFINITY, NAN};
-    use std::hash::{Hash, Hasher};
+    use rand::{distributions::Uniform, thread_rng, Rng};
+    use std::{
+        collections::hash_map::DefaultHasher,
+        f64::{INFINITY, NAN},
+        hash::{Hash, Hasher},
+    };
 
     #[test]
     fn test_ord() {

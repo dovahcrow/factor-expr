@@ -2,12 +2,9 @@ use super::super::{parser::Parameter, BoxOp, Named, Operator};
 use crate::ticker_batch::TickerBatch;
 use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
-use std::borrow::Cow;
-use std::collections::VecDeque;
-use std::iter::FromIterator;
-use std::mem;
+use std::{borrow::Cow, collections::VecDeque, iter::FromIterator, mem};
 
-pub struct TSLogReturn<T> {
+pub struct LogReturn<T> {
     win_size: usize,
     inner: BoxOp<T>,
 
@@ -15,13 +12,13 @@ pub struct TSLogReturn<T> {
     i: usize,
 }
 
-impl<T> Clone for TSLogReturn<T> {
+impl<T> Clone for LogReturn<T> {
     fn clone(&self) -> Self {
         Self::new(self.win_size, self.inner.clone())
     }
 }
 
-impl<T> TSLogReturn<T> {
+impl<T> LogReturn<T> {
     pub fn new(win_size: usize, inner: BoxOp<T>) -> Self {
         Self {
             win_size,
@@ -32,20 +29,22 @@ impl<T> TSLogReturn<T> {
     }
 }
 
-impl<T> Named for TSLogReturn<T> {
-    const NAME: &'static str = "TSLogReturn";
+impl<T> Named for LogReturn<T> {
+    const NAME: &'static str = "LogReturn";
 }
 
-impl<T: TickerBatch> Operator<T> for TSLogReturn<T> {
+impl<T: TickerBatch> Operator<T> for LogReturn<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;
+        #[cfg(feature = "check")]
         assert_eq!(tb.len(), vals.len());
-
         let mut results = Vec::with_capacity(tb.len());
 
         for &val in vals {
             if self.i < self.inner.ready_offset() {
+                #[cfg(feature = "check")]
+                assert!(val.is_nan());
                 results.push(f64::NAN);
                 self.i += 1;
                 continue;
@@ -130,26 +129,26 @@ impl<T: TickerBatch> Operator<T> for TSLogReturn<T> {
     }
 }
 
-impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<TSLogReturn<T>> {
+impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<LogReturn<T>> {
     #[throws(Error)]
-    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> TSLogReturn<T> {
+    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> LogReturn<T> {
         let mut params: Vec<_> = iter.into_iter().collect();
         if params.len() != 2 {
             throw!(anyhow!(
                 "{} expect a constant and a series, got {:?}",
-                TSLogReturn::<T>::NAME,
+                LogReturn::<T>::NAME,
                 params
             ))
         }
         let k1 = params.remove(0);
         let k2 = params.remove(0);
         match (k1, k2) {
-            (Parameter::Constant(c), Parameter::Operator(s)) => TSLogReturn::new(c as usize, s),
+            (Parameter::Constant(c), Parameter::Operator(s)) => LogReturn::new(c as usize, s),
             (a, b) => throw!(anyhow!(
                 "{name} expect a constant and a series, got ({name} {} {})",
                 a,
                 b,
-                name = TSLogReturn::<T>::NAME,
+                name = LogReturn::<T>::NAME,
             )),
         }
     }

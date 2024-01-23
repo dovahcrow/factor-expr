@@ -2,11 +2,9 @@ use super::super::{parser::Parameter, BoxOp, Named, Operator};
 use crate::ticker_batch::TickerBatch;
 use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
-use std::borrow::Cow;
-use std::mem;
-use std::{collections::VecDeque, iter::FromIterator};
+use std::{borrow::Cow, collections::VecDeque, iter::FromIterator, mem};
 
-pub struct TSSkew<T> {
+pub struct Skew<T> {
     win_size: usize,
     inner: BoxOp<T>,
 
@@ -15,13 +13,13 @@ pub struct TSSkew<T> {
     i: usize,
 }
 
-impl<T> Clone for TSSkew<T> {
+impl<T> Clone for Skew<T> {
     fn clone(&self) -> Self {
         Self::new(self.win_size, self.inner.clone())
     }
 }
 
-impl<T> TSSkew<T> {
+impl<T> Skew<T> {
     pub fn new(win_size: usize, inner: BoxOp<T>) -> Self {
         Self {
             win_size,
@@ -34,20 +32,23 @@ impl<T> TSSkew<T> {
     }
 }
 
-impl<T> Named for TSSkew<T> {
-    const NAME: &'static str = "TSSkew";
+impl<T> Named for Skew<T> {
+    const NAME: &'static str = "Skew";
 }
 
-impl<T: TickerBatch> Operator<T> for TSSkew<T> {
+impl<T: TickerBatch> Operator<T> for Skew<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;
+        #[cfg(feature = "check")]
         assert_eq!(tb.len(), vals.len());
 
         let mut results = Vec::with_capacity(tb.len());
 
         for &val in vals {
             if self.i < self.inner.ready_offset() {
+                #[cfg(feature = "check")]
+                assert!(val.is_nan());
                 results.push(f64::NAN);
                 self.i += 1;
                 continue;
@@ -152,9 +153,9 @@ impl<T: TickerBatch> Operator<T> for TSSkew<T> {
     }
 }
 
-impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<TSSkew<T>> {
+impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<Skew<T>> {
     #[throws(Error)]
-    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> TSSkew<T> {
+    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> Skew<T> {
         let mut params: Vec<_> = iter.into_iter().collect();
         if params.len() != 2 {
             throw!(anyhow!(
@@ -166,13 +167,11 @@ impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<TSSkew<T>> {
         let k1 = params.remove(0);
         let k2 = params.remove(0);
         match (k1, k2) {
-            (Parameter::Constant(c), Parameter::Operator(s)) if c >= 3. => {
-                TSSkew::new(c as usize, s)
-            }
+            (Parameter::Constant(c), Parameter::Operator(s)) if c >= 3. => Skew::new(c as usize, s),
             (Parameter::Constant(c), Parameter::Operator(_)) if c < 3. => {
                 throw!(anyhow!(
                     "{} for requires constant larger than 2, got {}",
-                    TSSkew::<T>::NAME,
+                    Skew::<T>::NAME,
                     c
                 ))
             }
@@ -180,7 +179,7 @@ impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<TSSkew<T>> {
                 "{name} expect a constant and a series, got ({name} {} {})",
                 a,
                 b,
-                name = TSSkew::<T>::NAME,
+                name = Skew::<T>::NAME,
             )),
         }
     }

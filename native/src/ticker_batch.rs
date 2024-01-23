@@ -1,5 +1,7 @@
-use arrow::array::{as_primitive_array, Float64Array};
-use arrow::record_batch::RecordBatch;
+use arrow::{
+    array::{as_primitive_array, Float64Array},
+    record_batch::RecordBatch,
+};
 use std::collections::HashMap;
 
 // Tickers should be sync because we will do parallel replay

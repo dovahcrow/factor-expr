@@ -1,15 +1,14 @@
 use super::super::{parser::Parameter, BoxOp, Named, Operator};
-use crate::float::{Ascending, Float, IntoFloat};
-use crate::ticker_batch::TickerBatch;
+use crate::{
+    float::{Ascending, Float, IntoFloat},
+    ticker_batch::TickerBatch,
+};
 use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
 use order_stats_tree::OSTree;
-use std::borrow::Cow;
-use std::collections::VecDeque;
-use std::iter::FromIterator;
-use std::mem;
+use std::{borrow::Cow, collections::VecDeque, iter::FromIterator, mem};
 
-pub struct TSQuantile<T> {
+pub struct Quantile<T> {
     win_size: usize,
     quantile: f64,
     r: usize, // win_size * quantile
@@ -20,13 +19,13 @@ pub struct TSQuantile<T> {
     i: usize,
 }
 
-impl<T> Clone for TSQuantile<T> {
+impl<T> Clone for Quantile<T> {
     fn clone(&self) -> Self {
         Self::new(self.win_size, self.quantile, self.inner.clone())
     }
 }
 
-impl<T> TSQuantile<T> {
+impl<T> Quantile<T> {
     pub fn new(win_size: usize, quantile: f64, inner: BoxOp<T>) -> Self {
         assert!(0. <= quantile && quantile <= 1.);
         Self {
@@ -41,20 +40,23 @@ impl<T> TSQuantile<T> {
     }
 }
 
-impl<T> Named for TSQuantile<T> {
-    const NAME: &'static str = "TSQuantile";
+impl<T> Named for Quantile<T> {
+    const NAME: &'static str = "Quantile";
 }
 
-impl<T: TickerBatch> Operator<T> for TSQuantile<T> {
+impl<T: TickerBatch> Operator<T> for Quantile<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;
+        #[cfg(feature = "check")]
         assert_eq!(tb.len(), vals.len());
 
         let mut results = Vec::with_capacity(tb.len());
 
         for &val in vals {
             if self.i < self.inner.ready_offset() {
+                #[cfg(feature = "check")]
+                assert!(val.is_nan());
                 results.push(f64::NAN);
                 self.i += 1;
                 continue;
@@ -145,14 +147,14 @@ impl<T: TickerBatch> Operator<T> for TSQuantile<T> {
     }
 }
 
-impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<TSQuantile<T>> {
+impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<Quantile<T>> {
     #[throws(Error)]
-    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> TSQuantile<T> {
+    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> Quantile<T> {
         let mut params: Vec<_> = iter.into_iter().collect();
         if params.len() != 3 {
             throw!(anyhow!(
                 "{} expect two constants and one series, got {:?}",
-                TSQuantile::<T>::NAME,
+                Quantile::<T>::NAME,
                 params
             ))
         }
@@ -161,14 +163,14 @@ impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<TSQuantile<T>> {
         let k3 = params.remove(0);
         match (k1, k2, k3) {
             (Parameter::Constant(c), Parameter::Constant(c2), Parameter::Operator(s)) => {
-                TSQuantile::new(c as usize, c2, s)
+                Quantile::new(c as usize, c2, s)
             }
             (a, b, c) => throw!(anyhow!(
                 "{name} expect two constants and a series, got ({name} {} {} {})",
                 a,
                 b,
                 c,
-                name = TSQuantile::<T>::NAME,
+                name = Quantile::<T>::NAME,
             )),
         }
     }

@@ -1,5 +1,5 @@
 [package]
-authors = ["Weiyuan Wu <youngw@sfu.ca>"]
+authors = ["Weiyuan Wu <weiyuan@crows.land>"]
 edition = "2018"
 name = "factor-expr"
 version = "0.2.3"
@@ -7,6 +7,7 @@ version = "0.2.3"
 [lib]
 crate-type = ["rlib", "cdylib"]
 name = "factor_expr"
+
 
 [dependencies]
 anyhow = "1"
@@ -38,3 +39,4 @@ built = {version = "0.7", features = ["chrono"]}
 default = ["extension"]
 executable = ["pyo3/auto-initialize"]
 extension = ["pyo3/extension-module"]
+check = []

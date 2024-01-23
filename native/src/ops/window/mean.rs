@@ -2,12 +2,9 @@ use super::super::{parser::Parameter, BoxOp, Named, Operator};
 use crate::ticker_batch::TickerBatch;
 use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
-use std::borrow::Cow;
-use std::collections::VecDeque;
-use std::iter::FromIterator;
-use std::mem;
+use std::{borrow::Cow, collections::VecDeque, iter::FromIterator, mem};
 
-pub struct TSMean<T> {
+pub struct Mean<T> {
     win_size: usize,
     inner: BoxOp<T>,
 
@@ -16,13 +13,13 @@ pub struct TSMean<T> {
     i: usize,
 }
 
-impl<T> Clone for TSMean<T> {
+impl<T> Clone for Mean<T> {
     fn clone(&self) -> Self {
         Self::new(self.win_size, self.inner.clone())
     }
 }
 
-impl<T> TSMean<T> {
+impl<T> Mean<T> {
     pub fn new(win_size: usize, inner: BoxOp<T>) -> Self {
         Self {
             win_size,
@@ -35,20 +32,23 @@ impl<T> TSMean<T> {
     }
 }
 
-impl<T> Named for TSMean<T> {
-    const NAME: &'static str = "TSMean";
+impl<T> Named for Mean<T> {
+    const NAME: &'static str = "Mean";
 }
 
-impl<T: TickerBatch> Operator<T> for TSMean<T> {
+impl<T: TickerBatch> Operator<T> for Mean<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;
+        #[cfg(feature = "check")]
         assert_eq!(tb.len(), vals.len());
 
         let mut results = Vec::with_capacity(tb.len());
 
         for &val in vals {
             if self.i < self.inner.ready_offset() {
+                #[cfg(feature = "check")]
+                assert!(val.is_nan());
                 results.push(f64::NAN);
                 self.i += 1;
                 continue;
@@ -134,26 +134,26 @@ impl<T: TickerBatch> Operator<T> for TSMean<T> {
     }
 }
 
-impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<TSMean<T>> {
+impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<Mean<T>> {
     #[throws(Error)]
-    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> TSMean<T> {
+    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> Mean<T> {
         let mut params: Vec<_> = iter.into_iter().collect();
         if params.len() != 2 {
             throw!(anyhow!(
                 "{} expect a constant and a series, got {:?}",
-                TSMean::<T>::NAME,
+                Mean::<T>::NAME,
                 params
             ))
         }
         let k1 = params.remove(0);
         let k2 = params.remove(0);
         match (k1, k2) {
-            (Parameter::Constant(c), Parameter::Operator(sub)) => TSMean::new(c as usize, sub),
+            (Parameter::Constant(c), Parameter::Operator(sub)) => Mean::new(c as usize, sub),
             (a, b) => throw!(anyhow!(
                 "{name} expect a constant and a series, got ({name} {} {})",
                 a,
                 b,
-                name = TSMean::<T>::NAME,
+                name = Mean::<T>::NAME,
             )),
         }
     }

@@ -5,11 +5,12 @@ use arrow::{
     record_batch::RecordBatch,
 };
 use fehler::throws;
-use parquet::file::reader::SerializedFileReader;
-use parquet::{arrow::arrow_reader::ParquetRecordBatchReader, file::reader::FileReader};
+use parquet::{
+    arrow::arrow_reader::ParquetRecordBatchReader,
+    file::reader::{FileReader, SerializedFileReader},
+};
 use rayon::prelude::*;
-use std::fs::File;
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, fs::File};
 
 static DEFAULT_BATCH_SIZE: usize = 2048;
 

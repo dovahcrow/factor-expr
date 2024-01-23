@@ -2,10 +2,7 @@ use super::super::{parser::Parameter, BoxOp, Named, Operator};
 use crate::ticker_batch::TickerBatch;
 use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
-use std::borrow::Cow;
-use std::collections::VecDeque;
-use std::iter::FromIterator;
-use std::mem;
+use std::{borrow::Cow, collections::VecDeque, iter::FromIterator, mem};
 
 #[derive(Clone)]
 struct Cache {
@@ -59,12 +56,15 @@ macro_rules! impl_minmax {
                 #[throws(Error)]
                 fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
                     let vals = &*self.inner.update(tb)?;
+                    #[cfg(feature = "check")]
                     assert_eq!(tb.len(), vals.len());
 
                     let mut results = Vec::with_capacity(tb.len());
 
                     for &val in vals {
                         if self.i < self.inner.ready_offset() {
+                            #[cfg(feature = "check")]
+                            assert!(val.is_nan());
                             results.push(f64::NAN);
                             self.i += 1;
                             continue;
@@ -182,8 +182,8 @@ macro_rules! impl_minmax {
 }
 
 impl_minmax! {
-    TSMin < { |cache: &Cache, _: usize| cache.history.front().unwrap().1 }
-    TSMax > { |cache: &Cache, _: usize| cache.history.front().unwrap().1 }
-    TSArgMin < { |cache: &Cache, win_size: usize| (cache.history.front().unwrap().0 + win_size - cache.seq - 1) as f64 }
-    TSArgMax > { |cache: &Cache, win_size: usize| (cache.history.front().unwrap().0 + win_size - cache.seq - 1) as f64 }
+    Min < { |cache: &Cache, _: usize| cache.history.front().unwrap().1 }
+    Max > { |cache: &Cache, _: usize| cache.history.front().unwrap().1 }
+    ArgMin < { |cache: &Cache, win_size: usize| (cache.history.front().unwrap().0 + win_size - cache.seq - 1) as f64 }
+    ArgMax > { |cache: &Cache, win_size: usize| (cache.history.front().unwrap().0 + win_size - cache.seq - 1) as f64 }
 }

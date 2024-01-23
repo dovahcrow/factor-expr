@@ -2,11 +2,9 @@ use super::super::{parser::Parameter, BoxOp, Named, Operator};
 use crate::ticker_batch::TickerBatch;
 use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
-use std::borrow::Cow;
-use std::mem;
-use std::{collections::VecDeque, iter::FromIterator};
+use std::{borrow::Cow, collections::VecDeque, iter::FromIterator, mem};
 
-pub struct TSStdev<T> {
+pub struct Stdev<T> {
     win_size: usize,
     inner: BoxOp<T>,
 
@@ -15,13 +13,13 @@ pub struct TSStdev<T> {
     i: usize,
 }
 
-impl<T> Clone for TSStdev<T> {
+impl<T> Clone for Stdev<T> {
     fn clone(&self) -> Self {
         Self::new(self.win_size, self.inner.clone())
     }
 }
 
-impl<T> TSStdev<T> {
+impl<T> Stdev<T> {
     pub fn new(win_size: usize, inner: BoxOp<T>) -> Self {
         Self {
             win_size,
@@ -34,21 +32,24 @@ impl<T> TSStdev<T> {
     }
 }
 
-impl<T> Named for TSStdev<T> {
-    const NAME: &'static str = "TSStd";
+impl<T> Named for Stdev<T> {
+    const NAME: &'static str = "Std";
 }
 
-impl<T: TickerBatch> Operator<T> for TSStdev<T> {
+impl<T: TickerBatch> Operator<T> for Stdev<T> {
     #[throws(Error)]
     fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
         let vals = &*self.inner.update(tb)?;
 
+        #[cfg(feature = "check")]
         assert_eq!(tb.len(), vals.len());
 
         let mut results = Vec::with_capacity(tb.len());
 
         for &val in vals {
             if self.i < self.inner.ready_offset() {
+                #[cfg(feature = "check")]
+                assert!(val.is_nan());
                 results.push(f64::NAN);
                 self.i += 1;
                 continue;
@@ -143,9 +144,9 @@ impl<T: TickerBatch> Operator<T> for TSStdev<T> {
     }
 }
 
-impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<TSStdev<T>> {
+impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<Stdev<T>> {
     #[throws(Error)]
-    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> TSStdev<T> {
+    fn from_iter<A: IntoIterator<Item = Parameter<T>>>(iter: A) -> Stdev<T> {
         let mut params: Vec<_> = iter.into_iter().collect();
         if params.len() != 2 {
             throw!(anyhow!(
@@ -161,16 +162,16 @@ impl<T: TickerBatch> FromIterator<Parameter<T>> for Result<TSStdev<T>> {
                 if c <= 1. {
                     throw!(anyhow!(
                         "win size for {} should larger than 1",
-                        TSStdev::<T>::NAME
+                        Stdev::<T>::NAME
                     ))
                 }
-                TSStdev::new(c as usize, s)
+                Stdev::new(c as usize, s)
             }
             (a, b) => throw!(anyhow!(
                 "{name} expect a constant and a series, got ({name} {} {})",
                 a,
                 b,
-                name = TSStdev::<T>::NAME,
+                name = Stdev::<T>::NAME,
             )),
         }
     }

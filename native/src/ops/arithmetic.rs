@@ -2,10 +2,7 @@ use super::{parser::Parameter, BoxOp, Named, Operator};
 use crate::ticker_batch::TickerBatch;
 use anyhow::{anyhow, Error, Result};
 use fehler::{throw, throws};
-use std::borrow::Cow;
-use std::cmp::max;
-use std::iter::FromIterator;
-use std::mem;
+use std::{borrow::Cow, cmp::max, iter::FromIterator, mem};
 
 macro_rules! impl_arithmetic_bivariate {
     ($([$name:tt => $op:ident: $($func:tt)+])+) => {
@@ -38,13 +35,17 @@ macro_rules! impl_arithmetic_bivariate {
                     let (l, r) = (&mut self.l, &mut self.r);
                     let (ls, rs) = rayon::join(|| l.update(tb), || r.update(tb));
                     let (ls, rs) = (&*ls?, &*rs?);
+                    #[cfg(feature = "check")]
                     assert_eq!(tb.len(), ls.len());
+                    #[cfg(feature = "check")]
                     assert_eq!(tb.len(), rs.len());
 
                     let mut results = Vec::with_capacity(tb.len());
 
                     for (&lval, &rval) in ls.into_iter().zip(rs) {
                         if self.i < self.l.ready_offset() || self.i < self.r.ready_offset() {
+                            #[cfg(feature = "check")]
+                            assert!(lval.is_nan() || rval.is_nan());
                             results.push(f64::NAN);
                             self.i += 1;
                             continue;
@@ -190,12 +191,15 @@ macro_rules! impl_arithmetic_univariate {
                 #[throws(Error)]
                 fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
                     let vals = &*self.inner.update(tb)?;
+                    #[cfg(feature = "check")]
                     assert_eq!(tb.len(), vals.len());
 
                     let mut results = Vec::with_capacity(tb.len());
 
                     for &val in vals {
                         if self.i < self.inner.ready_offset() {
+                            #[cfg(feature = "check")]
+                            assert!(val.is_nan());
                             results.push(f64::NAN);
                             self.i += 1;
                             continue;
@@ -322,12 +326,15 @@ macro_rules! impl_arithmetic_univariate_1arg {
                 #[throws(Error)]
                 fn update<'a>(&mut self, tb: &'a T) -> Cow<'a, [f64]> {
                     let vals = &*self.s.update(tb)?;
+                    #[cfg(feature = "check")]
                     assert_eq!(tb.len(), vals.len());
 
                     let mut results = Vec::with_capacity(tb.len());
 
                     for &val in vals {
                         if self.i < self.s.ready_offset() {
+                            #[cfg(feature = "check")]
+                            assert!(val.is_nan());
                             results.push(f64::NAN);
                             self.i += 1;
                             continue;

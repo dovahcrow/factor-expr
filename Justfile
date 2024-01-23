@@ -4,7 +4,7 @@ bootstrap-python:
     rm python/README.md
 
 build-extension:
-    cd native && cargo build --release
+    cd native && cargo build --release --features check
     ls native/target/release
     cd python && poetry run python ../scripts/python-helper.py copy-extension
 
