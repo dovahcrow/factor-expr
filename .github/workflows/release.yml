@@ -69,7 +69,7 @@ jobs:
           ls python/dist
 
       - name: Persist artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: "${{ matrix.os }}-${{ matrix.python-version }}"
           path: python/dist/*.whl
