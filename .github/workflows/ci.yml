@@ -22,7 +22,7 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
 
-      - uses: dtolnay/rust-toolchain@1.75.0
+      - uses: dtolnay/rust-toolchain@1.72.0
 
 
       - name: Install python

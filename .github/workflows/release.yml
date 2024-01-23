@@ -18,7 +18,7 @@ jobs:
         run: |
           echo "/opt/python/cp${{ matrix.python-version }}-cp${{ matrix.python-version }}/bin" >> $GITHUB_PATH
 
-      - uses: dtolnay/rust-toolchain@1.75.0
+      - uses: dtolnay/rust-toolchain@1.72.0
 
       - name: Install tools
         run: |
@@ -54,7 +54,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           architecture: x64
 
-      - uses: dtolnay/rust-toolchain@1.75.0
+      - uses: dtolnay/rust-toolchain@1.72.0
 
       - name: Install tools
         run: |
