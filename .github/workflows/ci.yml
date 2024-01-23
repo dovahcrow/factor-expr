@@ -22,8 +22,10 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
 
-      - uses: dtolnay/rust-toolchain@1.72.0
-
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rustfmt
 
       - name: Install python
         uses: actions/setup-python@v2
